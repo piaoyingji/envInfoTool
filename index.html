@@ -331,30 +331,29 @@
                             <button class="copy-btn" onclick="copyText('${safePwd}')" title="パスワードをコピー">コピー</button>
                         </div>
 
-                    ${(dbName || dbUser || dbPwd) ? `
                         <div style="background-color: var(--bg-subtle); padding: 1rem; border-radius: 2px; border: 1px solid var(--border); margin-top: 1rem;">
                             <div style="color: var(--primary); font-weight: bold; font-size: 0.85rem; margin-bottom: 0.75rem;">▼ データベース情報</div>
                             
                             <div class="env-detail">
                                 <div class="env-detail-label" style="color:var(--text-main);">DB名</div>
-                                <div class="env-detail-value">${dbName}</div>
-                                <button class="copy-btn" onclick="copyText('${dbName}')" title="DB名をコピー">コピー</button>
+                                <div class="env-detail-value">${dbName || '<span style="color:#aaa;">(未設定)</span>'}</div>
+                                <button class="copy-btn" onclick="copyText('${dbName}')" title="DB名をコピー" ${!dbName ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>コピー</button>
                             </div>
                             
                             <div class="env-detail">
                                 <div class="env-detail-label" style="color:var(--text-main);">DBユーザ</div>
-                                <div class="env-detail-value">${dbUser}</div>
-                                <button class="copy-btn" onclick="copyText('${dbUser}')" title="DBユーザー名をコピー">コピー</button>
+                                <div class="env-detail-value">${dbUser || '<span style="color:#aaa;">(未設定)</span>'}</div>
+                                <button class="copy-btn" onclick="copyText('${dbUser}')" title="DBユーザー名をコピー" ${!dbUser ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>コピー</button>
                             </div>
                             
                             <div class="env-detail" style="border: none;">
                                 <div class="env-detail-label" style="color:var(--text-main);">DB Pwd</div>
                                 <div class="env-detail-value">
-                                    <span>${dbPwd}</span>
+                                    <span>${dbPwd || '<span style="color:#aaa;">(未設定)</span>'}</span>
                                 </div>
-                                <button class="copy-btn" onclick="copyText('${dbPwd}')" title="DBパスワードをコピー">コピー</button>
+                                <button class="copy-btn" onclick="copyText('${dbPwd}')" title="DBパスワードをコピー" ${!dbPwd ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>コピー</button>
                             </div>
-                        </div>` : ''}
+                        </div>
                     </div>
                 `;
                 resultsArea.appendChild(card);
