@@ -1,7 +1,18 @@
 $baseDir = $PSScriptRoot
 if ([string]::IsNullOrEmpty($baseDir)) { $baseDir = $PWD }
 
-$port = 8080
+# --- Load .env Configuration ---
+$envFile = Join-Path $baseDir ".env"
+$config = @{}
+if (Test-Path $envFile) {
+    Get-Content $envFile | Where-Object { $_ -match '=' -and $_ -notmatch '^#' } | ForEach-Object {
+        $key, $value = $_.Split('=', 2).Trim()
+        $config[$key] = $value
+    }
+}
+$port = if ($config["PORT"]) { [int]$config["PORT"] } else { 8080 }
+$authPassword = if ($config["AUTH_PASSWORD"]) { $config["AUTH_PASSWORD"] } else { "nho1234567" }
+# -------------------------------
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://+:$port/")
 
@@ -50,7 +61,7 @@ try {
             if ($localPath -eq "/auth.jsp") {
                 $parts = $body.Split('=')
                 $pwd = if ($parts.Length -gt 1) { [uri]::UnescapeDataString($parts[1]) } else { "" }
-                $outStr = if ($pwd -eq "nho1234567") { "OK" } else { "NG" }
+                $outStr = if ($pwd -eq $authPassword) { "OK" } else { "NG" }
                 $buffer = [System.Text.Encoding]::UTF8.GetBytes($outStr)
                 $response.ContentType = "text/plain; charset=utf-8"
             }
