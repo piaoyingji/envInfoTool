@@ -17,9 +17,14 @@ try {
     exit
 }
 
+$localIp = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'Loopback|VirtualBox|VMware|Pseudo-Interface' -and $_.IPAddress -notlike '169.254.*' } | Select-Object -First 1 -ExpandProperty IPAddress)
+
 Write-Host "================================================="
 Write-Host " EnvPortal - Environment & RDP Navigation Server"
-Write-Host " Server is running on http://localhost:$port/"
+Write-Host " Local Access: http://localhost:$port/"
+if ($localIp) {
+    Write-Host " IP Access:    http://$localIp`:$port/"
+}
 Write-Host " Press Ctrl+C to stop."
 Write-Host "================================================="
 

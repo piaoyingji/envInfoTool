@@ -2,17 +2,18 @@
 title EnvPortal Server
 
 :: Check for Administrator privileges
->nul 2>&1 "%SYSTEMROOT%\system32\cacls.exe" "%SYSTEMROOT%\system32\config\system"
-if '%errorlevel%' NEQ '0' (
-    echo プログラムを管理者権限で再起動しています...
-    echo Set UAC = CreateObject^("Shell.Application"^) > "%temp%\getadmin.vbs"
-    echo UAC.ShellExecute "%~s0", "", "", "runas", 1 >> "%temp%\getadmin.vbs"
-    "%temp%\getadmin.vbs"
-    exit /B
+net session >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Admin privileges required.
+    echo [ERROR] Please right-click "start.bat" and select "Run as administrator".
+    pause
+    exit /b 1
 )
-if exist "%temp%\getadmin.vbs" ( del "%temp%\getadmin.vbs" )
 
 cd /d "%~dp0"
-echo Starting EnvPortal independent PowerShell Web Server on all IPs...
-powershell -ExecutionPolicy Bypass -File "server.ps1"
+echo Configuring Firewall...
+powershell -Command "if (!(Get-NetFirewallRule -DisplayName 'EnvPortal Default' -ErrorAction SilentlyContinue)) { New-NetFirewallRule -DisplayName 'EnvPortal Default' -Direction Inbound -LocalPort 8080 -Protocol TCP -Action Allow -Description 'Allow EnvPortal Server IP Access' }"
+
+echo Starting EnvPortal PowerShell Server...
+powershell.exe -ExecutionPolicy Bypass -File "server.ps1"
 pause
