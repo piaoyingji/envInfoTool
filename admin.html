@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>環境データ管理 - 組織環境管理システム</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        .editor-grid {
+            display: grid; 
+            grid-template-columns: 1.2fr 1.2fr 2.5fr 1fr 1fr auto; 
+            gap: 0.5rem; 
+            align-items: start; 
+            background: rgba(0,0,0,0.25); 
+            padding: 1rem; 
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            border: 1px solid rgba(255,255,255,0.05);
+            transition: all 0.2s;
+        }
+        .editor-grid:hover {
+            background: rgba(0,0,0,0.4);
+            border-color: rgba(255,255,255,0.15);
+        }
+        .editor-grid input {
+            padding: 0.6rem; 
+            font-size: 0.85rem;
+            background: rgba(15, 23, 42, 0.8);
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .editor-grid label {
+            font-size: 0.75rem; 
+            color: var(--text-secondary);
+            margin-bottom: 0.3rem;
+            display: block;
+        }
+        .actions-bar {
+            display: flex; 
+            gap: 1rem; 
+            margin-bottom: 2rem;
+            justify-content: center;
+            background: rgba(30, 41, 59, 0.8);
+            padding: 1.2rem;
+            border-radius: 12px;
+            border: 1px solid var(--card-border);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 1rem;
+            z-index: 100;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+        }
+        .del-btn {
+            background: transparent;
+            color: #ef4444; 
+            border: 1px solid #ef4444; 
+            padding: 0.5rem; 
+            border-radius: 6px; 
+            cursor: pointer;
+            transition: all 0.2s;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .del-btn:hover {
+            background: #ef4444;
+            color: white;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1.5rem;
+            margin-top: 2rem;
+            margin-bottom: 2rem;
+        }
+        .pagination button {
+            background: rgba(255, 255, 255, 0.1);
+            color: #f8fafc;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+            width: auto;
+        }
+        .pagination button:hover:not(:disabled) {
+            background: rgba(59, 130, 246, 0.4);
+            border-color: #60a5fa;
+        }
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .pagination span {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" style="max-width: 1300px;">
+        <div class="header">
+            <h1>環境データ管理</h1>
+            <p>既存の環境情報を修正、または新しい組織の情報を追加します</p>
+        </div>
+        
+        <nav>
+            <a href="index.html">環境検索</a>
+            <a href="admin.html" class="active">データ管理</a>
+        </nav>
+
+        <div class="actions-bar" style="align-items: center;">
+            <div>
+                <select id="orgFilter" style="width: 260px; padding: 0.65rem; border-radius: 6px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-primary);" onchange="currentOrgPage = 1; renderEditor()">
+                    <option value="">-- 全ての組織を表示 --</option>
+                </select>
+            </div>
+            <div style="flex-grow: 1;"></div>
+            <button type="button" class="primary-btn" style="width: auto; background: #3b82f6;" onclick="addNewRow()">＋ 新規データの追加</button>
+            <button type="button" class="primary-btn" style="width: auto; background: #10b981;" onclick="saveToServer()">💾 サーバーに保存する (一括更新)</button>
+        </div>
+
+        <div id="editorArea">
+            <div style="text-align:center; color:#94a3b8; padding: 2rem;">データを読み込んでいます...</div>
+        </div>
+    </div>
+
+    <!-- 弹窗提示 -->
+    <div id="toast">保存成功。</div>
+
+    <script>
+        let currentData = [];
+        let currentOrgPage = 1;
+        const ORGS_PER_PAGE = 6;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            fetch('data.csv')
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.text();
+                })
+                .then(csvText => {
+                    Papa.parse(csvText, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: function(results) {
+                            currentData = results.data;
+                            initFilter();
+                            renderEditor();
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('data.csv の読み込みに失敗しました:', error);
+                    document.getElementById('editorArea').innerHTML = '<div style="text-align:center; color:#ef4444; padding: 2rem;">データの読み込みに失敗しました。</div>';
+                });
+        });
+
+        function renderEditor() {
+            const editorArea = document.getElementById('editorArea');
+            editorArea.innerHTML = '';
+
+            if(currentData.length === 0) {
+                editorArea.innerHTML = '<div class="glass-panel" style="text-align:center; padding:3rem; color:var(--text-secondary);">データがありません。「新規データの追加」をクリックして開始してください。</div>';
+                return;
+            }
+
+            const orgMap = new Map();
+            currentData.forEach((row, idx) => {
+                const org = (row['組織名'] || '').trim();
+                let key = org === '' ? '（未設定の組織・新規）' : org;
+                if (!orgMap.has(key)) orgMap.set(key, []);
+                orgMap.get(key).push({ ...row, originalIndex: idx });
+            });
+
+            const sortedOrgs = Array.from(orgMap.keys()).sort((a,b) => {
+                if(a === '（未設定の組織・新規）') return -1;
+                if(b === '（未設定の組織・新規）') return 1;
+                return a.localeCompare(b);
+            });
+
+            const filterVal = document.getElementById('orgFilter').value;
+            let filteredOrgs = sortedOrgs;
+
+            if (filterVal !== '') {
+                filteredOrgs = sortedOrgs.filter(org => org === filterVal || org === '（未設定の組織・新規）');
+            }
+
+            const totalPages = Math.ceil(filteredOrgs.length / ORGS_PER_PAGE);
+            if (currentOrgPage > totalPages) currentOrgPage = Math.max(1, totalPages);
+            if (currentOrgPage < 1) currentOrgPage = 1;
+
+            const startIndex = (currentOrgPage - 1) * ORGS_PER_PAGE;
+            const endIndex = Math.min(startIndex + ORGS_PER_PAGE, filteredOrgs.length);
+            const orgsToShow = filteredOrgs.slice(startIndex, endIndex);
+
+            orgsToShow.forEach(org => {
+                const orgBlock = document.createElement('div');
+                orgBlock.className = 'glass-panel';
+                orgBlock.style.padding = '1.5rem';
+                orgBlock.style.marginBottom = '2rem';
+
+                const orgHeader = document.createElement('h2');
+                orgHeader.textContent = '🏢 ' + org;
+                orgHeader.style.color = '#a78bfa';
+                orgHeader.style.borderBottom = '1px solid rgba(255,255,255,0.1)';
+                orgHeader.style.paddingBottom = '0.5rem';
+                orgHeader.style.marginBottom = '1.2rem';
+                orgHeader.style.fontSize = '1.25rem';
+                orgBlock.appendChild(orgHeader);
+
+                const rows = orgMap.get(org);
+                rows.forEach(item => {
+                    const idx = item.originalIndex;
+                    const itemEditor = document.createElement('div');
+                    itemEditor.className = 'editor-grid';
+                    itemEditor.innerHTML = `
+                        <div>
+                            <label>組織名</label>
+                            <input type="text" value="${escapeHtml(item['組織名'])}" onblur="updateData(${idx}, '組織名', this.value)" placeholder="組織名">
+                        </div>
+                        <div>
+                            <label>構築環境名</label>
+                            <input type="text" value="${escapeHtml(item['構築環境名'])}" onchange="updateData(${idx}, '構築環境名', this.value)" placeholder="例:UATテスト環境">
+                        </div>
+                        <div>
+                            <label>URL</label>
+                            <input type="text" value="${escapeHtml(item['URL'])}" onchange="updateData(${idx}, 'URL', this.value)" placeholder="https://...">
+                        </div>
+                        <div>
+                            <label>ID</label>
+                            <input type="text" value="${escapeHtml(item['ログインID'])}" onchange="updateData(${idx}, 'ログインID', this.value)" placeholder="ID">
+                        </div>
+                        <div>
+                            <label>パスワード</label>
+                            <input type="text" value="${escapeHtml(item['ログインパスワード'])}" onchange="updateData(${idx}, 'ログインパスワード', this.value)" placeholder="Password">
+                        </div>
+                        <div style="padding-top: 19px;">
+                            <button type="button" class="del-btn" onclick="deleteRow(${idx})" title="このデータを削除">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/></svg>
+                            </button>
+                        </div>
+                    `;
+                    orgBlock.appendChild(itemEditor);
+                });
+
+                editorArea.appendChild(orgBlock);
+            });
+
+            // 渲染分页控件
+            if (totalPages > 1) {
+                const paginationDiv = document.createElement('div');
+                paginationDiv.className = 'pagination';
+                
+                const prevBtn = document.createElement('button');
+                prevBtn.textContent = '前へ';
+                prevBtn.onclick = () => changePage(-1);
+                if (currentOrgPage === 1) prevBtn.disabled = true;
+
+                const pageSpan = document.createElement('span');
+                pageSpan.textContent = `ページ ${currentOrgPage} / ${totalPages}`;
+
+                const nextBtn = document.createElement('button');
+                nextBtn.textContent = '次へ';
+                nextBtn.onclick = () => changePage(1);
+                if (currentOrgPage === totalPages) nextBtn.disabled = true;
+
+                paginationDiv.appendChild(prevBtn);
+                paginationDiv.appendChild(pageSpan);
+                paginationDiv.appendChild(nextBtn);
+                
+                editorArea.appendChild(paginationDiv);
+            }
+        }
+
+        function changePage(direction) {
+            currentOrgPage += direction;
+            renderEditor();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function updateData(index, field, value) {
+            currentData[index][field] = value;
+            if (field === '組織名') {
+                initFilter();
+                renderEditor();
+            }
+        }
+
+        function deleteRow(index) {
+            if(confirm("このデータを削除してもよろしいですか？")) {
+                currentData.splice(index, 1);
+                initFilter();
+                renderEditor();
+            }
+        }
+
+        function addNewRow() {
+            // 如果当前在按照特定机构进行过滤检索，则新增的记录自动附加上该机构名
+            const filterVal = document.getElementById('orgFilter').value;
+            
+            // 在数组开头追加
+            currentData.unshift({
+                '組織名': filterVal || '',
+                '構築環境名': '',
+                'URL': '',
+                'ログインID': '',
+                'ログインパスワード': ''
+            });
+            initFilter();
+            renderEditor();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function initFilter() {
+            const orgSelect = document.getElementById('orgFilter');
+            const currentSelected = orgSelect.value;
+            
+            const orgSet = new Set();
+            currentData.forEach(item => {
+                const val = (item['組織名'] || '').trim();
+                if(val !== '') orgSet.add(val);
+            });
+            
+            orgSelect.innerHTML = '<option value="">-- 全ての組織を表示 --</option>';
+            Array.from(orgSet).sort().forEach(org => {
+                const opt = document.createElement('option');
+                opt.value = org;
+                opt.textContent = org;
+                orgSelect.appendChild(opt);
+            });
+            
+            if(Array.from(orgSelect.options).some(o => o.value === currentSelected)) {
+                orgSelect.value = currentSelected;
+            }
+        }
+
+        function saveToServer() {
+            // 清理并过滤掉空白行
+            const filteredData = currentData.filter(row => {
+                return (row['組織名'] || '').trim() !== '' || (row['構築環境名'] || '').trim() !== '' || (row['URL'] || '').trim() !== '';
+            });
+            
+            const csv = Papa.unparse(filteredData, { quotes: true });
+            
+            fetch('update_csv.jsp', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain; charset=UTF-8'
+                },
+                body: csv
+            })
+            .then(res => {
+                if (res.ok) {
+                    currentData = filteredData;
+                    renderEditor();
+                    showToast('保存成功。サーバーのデータが一括更新されました。');
+                } else {
+                    res.text().then(text => alert('サーバーエラー: ' + text));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('ネットワークエラー。Tomcatサーバー上で実行されているか確認してください。');
+            });
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

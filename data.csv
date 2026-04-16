@@ -1,0 +1,6 @@
+組織名,構築環境名,URL,ログインID,ログインパスワード
+ABCテクノロジー株式会社,財務システムUATテスト環境,https://uat.example.com/login,admin_test,Password123!
+ABCテクノロジー株式会社,財務システム本番環境,https://prod.example.com/login,admin,ProdPwd!
+XYZグループ,人事システム開発環境,https://dev.xyz.com,dev_user,dev123
+XYZグループ,人事システムテスト環境,https://test.xyz.com,test_user,test123
+DEF物流,倉庫システム本番環境,https://wms.def.com,admin,wms!admin

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>組織環境管理システム</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        .org-summary-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: transform 0.2s, background 0.2s;
+            margin-bottom: 1.25rem;
+        }
+        .org-summary-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        .org-name-header {
+            font-size: 1.25rem;
+            color: #60a5fa;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+            transition: all 0.2s;
+        }
+        .org-name-header:hover {
+            color: #93c5fd;
+            text-decoration: underline;
+        }
+        .env-badge {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(59, 130, 246, 0.15);
+            color: #e2e8f0;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-right: 0.75rem;
+            margin-bottom: 0.75rem;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        .pagination {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+        .pagination button {
+            background: rgba(255, 255, 255, 0.1);
+            color: #f8fafc;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+            width: auto;
+        }
+        .pagination button:hover:not(:disabled) {
+            background: rgba(59, 130, 246, 0.4);
+            border-color: #60a5fa;
+        }
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .pagination span {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>組織環境管理システム</h1>
+            <p>特定の組織の各種テストおよび本番環境のログイン情報をすばやく検索します</p>
+        </div>
+        
+        <nav>
+            <a href="index.html" class="active">環境検索</a>
+            <a href="admin.html">データ管理</a>
+        </nav>
+
+        <div class="glass-panel">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="orgSelect" style="font-size: 1.1rem; margin-bottom: 1rem; color: #f8fafc;">対象組織を選択</label>
+                <div style="position: relative;">
+                    <select id="orgSelect">
+                        <option value="">-- データ読み込み中... --</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="resultsArea" class="env-grid">
+            <div style="grid-column: 1 / -1;" class="empty-state">
+                データ読み込み中...
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗提示 -->
+    <div id="toast">コピーしました</div>
+
+    <script>
+        let fullData = [];
+        let currentOrgPage = 1;
+        const ORGS_PER_PAGE = 6;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const orgSelect = document.getElementById('orgSelect');
+            
+            fetch('data.csv')
+                .then(response => {
+                    if (!response.ok) throw new Error('ネットワークリクエストに失敗しました');
+                    return response.text();
+                })
+                .then(csvText => {
+                    Papa.parse(csvText, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: function(results) {
+                            fullData = results.data;
+                            initDropdown();
+                            renderInitialSummary(); // 初期化時に概要を表示
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('CSVの取得または解析に失敗しました:', error);
+                    orgSelect.innerHTML = '<option value="">読み込み失敗。data.csvが存在するか確認してください</option>';
+                    orgSelect.disabled = true;
+                    document.getElementById('resultsArea').innerHTML = '<div style="grid-column: 1 / -1;" class="empty-state">エラーが発生しました。</div>';
+                });
+        });
+
+        function initDropdown() {
+            const orgSelect = document.getElementById('orgSelect');
+            
+            const orgSet = new Set();
+            fullData.forEach(item => {
+                if(item['組織名'] && item['組織名'].trim() !== '') {
+                    orgSet.add(item['組織名'].trim());
+                }
+            });
+
+            orgSelect.innerHTML = '<option value="">-- 全ての組織の概要を表示 --</option>';
+            
+            const sortedOrgs = Array.from(orgSet).sort();
+            
+            sortedOrgs.forEach(org => {
+                const opt = document.createElement('option');
+                opt.value = org;
+                opt.textContent = org;
+                orgSelect.appendChild(opt);
+            });
+
+            orgSelect.addEventListener('change', (e) => {
+                if (e.target.value === "") {
+                    // プルダウンが空になったら初期画面に戻る
+                    renderInitialSummary();
+                } else {
+                    renderEnvironments(e.target.value);
+                }
+            });
+        }
+
+        // ページを切り替える関数
+        function changePage(direction) {
+            currentOrgPage += direction;
+            renderInitialSummary();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // 以机构为单位显示机构名和构筑环境名，带分页
+        function renderInitialSummary() {
+            const resultsArea = document.getElementById('resultsArea');
+            resultsArea.innerHTML = ''; 
+            
+            // 确保下拉框值为空
+            document.getElementById('orgSelect').value = '';
+
+            const orgMap = new Map();
+            fullData.forEach(item => {
+                const org = (item['組織名'] || '').trim();
+                const env = (item['構築環境名'] || '').trim();
+                if (org) {
+                    if (!orgMap.has(org)) {
+                        orgMap.set(org, []);
+                    }
+                    if (env) {
+                        orgMap.get(org).push(env);
+                    }
+                }
+            });
+
+            if (orgMap.size === 0) {
+                resultsArea.innerHTML = `<div style="grid-column: 1 / -1;" class="empty-state">データがありません。</div>`;
+                return;
+            }
+
+            const allOrgs = Array.from(orgMap.keys()).sort();
+            const totalPages = Math.ceil(allOrgs.length / ORGS_PER_PAGE);
+
+            if (currentOrgPage > totalPages) currentOrgPage = totalPages;
+            if (currentOrgPage < 1) currentOrgPage = 1;
+
+            const startIndex = (currentOrgPage - 1) * ORGS_PER_PAGE;
+            const endIndex = Math.min(startIndex + ORGS_PER_PAGE, allOrgs.length);
+            const orgsToShow = allOrgs.slice(startIndex, endIndex);
+
+            const wrapper = document.createElement('div');
+            wrapper.style.gridColumn = '1 / -1'; // 占满整个 grid 行
+            
+            orgsToShow.forEach(org => {
+                const envs = orgMap.get(org);
+                const envHtml = envs.map(e => `<span class="env-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>${sanitizeHTML(e)}</span>`).join('');
+                
+                const card = document.createElement('div');
+                card.className = 'org-summary-card';
+                card.innerHTML = `
+                    <div class="org-name-header" onclick="selectOrg('${sanitizeHTML(org)}')">
+                        🏢 ${sanitizeHTML(org)}
+                    </div>
+                    <div>
+                        ${envHtml}
+                    </div>
+                `;
+                wrapper.appendChild(card);
+            });
+            resultsArea.appendChild(wrapper);
+
+            // 渲染分页控件
+            if (totalPages > 1) {
+                const paginationDiv = document.createElement('div');
+                paginationDiv.className = 'pagination';
+                
+                const prevBtn = document.createElement('button');
+                prevBtn.textContent = '前へ';
+                prevBtn.onclick = () => changePage(-1);
+                if (currentOrgPage === 1) prevBtn.disabled = true;
+
+                const pageSpan = document.createElement('span');
+                pageSpan.textContent = `ページ ${currentOrgPage} / ${totalPages}`;
+
+                const nextBtn = document.createElement('button');
+                nextBtn.textContent = '次へ';
+                nextBtn.onclick = () => changePage(1);
+                if (currentOrgPage === totalPages) nextBtn.disabled = true;
+
+                paginationDiv.appendChild(prevBtn);
+                paginationDiv.appendChild(pageSpan);
+                paginationDiv.appendChild(nextBtn);
+                
+                resultsArea.appendChild(paginationDiv);
+            }
+        }
+
+        // クリックで特定組織の詳細を表示
+        function selectOrg(orgName) {
+            document.getElementById('orgSelect').value = orgName;
+            renderEnvironments(orgName);
+            // ページ上部にスクロール
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // 机构具体登录信息显示
+        function renderEnvironments(selectedOrg) {
+            const resultsArea = document.getElementById('resultsArea');
+            resultsArea.innerHTML = ''; 
+
+            const matchedEnvs = fullData.filter(item => {
+                return (item['組織名'] || '').trim() === selectedOrg;
+            });
+
+            if (matchedEnvs.length === 0) {
+                resultsArea.innerHTML = `<div style="grid-column: 1 / -1;" class="empty-state">この組織に関連する環境データはありません。</div>`;
+                return;
+            }
+
+            matchedEnvs.forEach(env => {
+                const card = document.createElement('div');
+                card.className = 'env-card';
+                
+                const safeUrl = sanitizeHTML(env['URL']);
+                const safeId = sanitizeHTML(env['ログインID']);
+                const safePwd = sanitizeHTML(env['ログインパスワード']);
+                
+                const pwdId = 'pwd_' + Math.random().toString(36).substr(2, 9);
+                
+                card.innerHTML = `
+                    <h3>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.5rem;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        ${sanitizeHTML(env['構築環境名'])}
+                    </h3>
+                    
+                    <div class="env-detail">
+                        <div class="env-detail-label">URL</div>
+                        <div class="env-detail-value">
+                            <a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>
+                        </div>
+                        <button class="copy-btn" onclick="copyText('${safeUrl}')" title="URLをコピー">コピー</button>
+                    </div>
+                    
+                    <div class="env-detail">
+                        <div class="env-detail-label">ID</div>
+                        <div class="env-detail-value">${safeId}</div>
+                        <button class="copy-btn" onclick="copyText('${safeId}')" title="IDをコピー">コピー</button>
+                    </div>
+                    
+                    <div class="env-detail">
+                        <div class="env-detail-label">PWD</div>
+                        <div class="env-detail-value">
+                            <span id="${pwdId}">${safePwd}</span>
+                        </div>
+                        <button class="copy-btn" onclick="copyText('${safePwd}')" title="パスワードをコピー">コピー</button>
+                    </div>
+                `;
+                resultsArea.appendChild(card);
+            });
+        }
+
+        function sanitizeHTML(str) {
+            if (!str) return '';
+            const temp = document.createElement('div');
+            temp.textContent = str;
+            return temp.innerHTML;
+        }
+
+        function copyText(text) {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast('コピーしました: ' + text);
+                }).catch(err => {
+                    console.error('コピー失敗:', err);
+                    fallbackCopyText(text); // 剪贴板API因为权限或者非HTTPS拒绝时使用降级方案
+                });
+            } else {
+                // 如果运行在内网非 HTTPS 下，navigator.clipboard 会变为 undefined
+                fallbackCopyText(text);
+            }
+        }
+
+        function fallbackCopyText(text) {
+            try {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.position = "fixed";  // 防止页面滚动和闪烁
+                textArea.style.top = "-9999px";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                const successful = document.execCommand("copy");
+                document.body.removeChild(textArea);
+                if (successful) {
+                    showToast('コピーしました: ' + text);
+                } else {
+                    showToast('コピーに失敗しました。手動でコピーしてください。');
+                }
+            } catch (err) {
+                console.error('Fallbackコピー失敗:', err);
+                showToast('コピーに失敗しました。手動でコピーしてください。');
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
