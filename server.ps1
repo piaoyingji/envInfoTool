@@ -1,3 +1,6 @@
+$baseDir = $PSScriptRoot
+if ([string]::IsNullOrEmpty($baseDir)) { $baseDir = $PWD }
+
 $port = 8080
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$port/")
@@ -37,7 +40,7 @@ try {
             }
             elseif ($localPath -eq "/update_csv.jsp" -or $localPath -eq "/update_rdp.jsp") {
                 $file = if ($localPath -eq "/update_csv.jsp") { "data.csv" } else { "rdp.csv" }
-                $filePath = Join-Path $PWD $file
+                $filePath = Join-Path $baseDir $file
                 
                 # Write file with UTF-8 BOM representation
                 $utf8NoBom = New-Object System.Text.UTF8Encoding $true
@@ -79,8 +82,8 @@ try {
                 $response.ContentType = "text/plain; charset=utf-8"
             }
             else {
-                $filePath = Join-Path $PWD ($localPath.TrimStart('/'))
-                if ($localPath -eq "/") { $filePath = Join-Path $PWD "index.html" }
+                $filePath = Join-Path $baseDir ($localPath.TrimStart('/'))
+                if ($localPath -eq "/") { $filePath = Join-Path $baseDir "index.html" }
                 
                 if (Test-Path $filePath -PathType Leaf) {
                     $buffer = [System.IO.File]::ReadAllBytes($filePath)
@@ -91,7 +94,7 @@ try {
                     elseif ($ext -eq ".csv") { $response.ContentType = "text/csv; charset=utf-8" }
                 } else {
                     $response.StatusCode = 404
-                    $buffer = [System.Text.Encoding]::UTF8.GetBytes("File Not Found")
+                    $buffer = [System.Text.Encoding]::UTF8.GetBytes("File Not Found: " + $filePath)
                 }
             }
         }
