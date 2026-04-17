@@ -10,11 +10,21 @@ if (Test-Path $envFile) {
         $config[$key] = $value
     }
 }
+# -------------------------------
 $port = if ($config["PORT"]) { [int]$config["PORT"] } else { 8080 }
 $authPassword = if ($config["AUTH_PASSWORD"]) { $config["AUTH_PASSWORD"] } else { "nho1234567" }
+
+# --- Admin check and Firewall config ---
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+if ($isAdmin) {
+    # Configure Firewall
+    if (!(Get-NetFirewallRule -DisplayName 'EnvPortal Default' -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName 'EnvPortal Default' -Direction Inbound -LocalPort $port -Protocol TCP -Action Allow -Description 'Allow EnvPortal Server IP Access'
+    }
+}
 # -------------------------------
 $listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add("http://+:$port/")
+$listener.Prefixes.Add("http://*:$port/")
 
 try {
     $listener.Start()
@@ -32,10 +42,8 @@ $localIp = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAl
 
 Write-Host "================================================="
 Write-Host " EnvPortal - Environment & RDP Navigation Server"
-Write-Host " Local Access: http://localhost:$port/"
-if ($localIp) {
-    Write-Host " IP Access:    http://$localIp`:$port/"
-}
+Write-Host " Running on: http://0.0.0.0:$port/ (All IPs)"
+Write-Host " Local URL:  http://localhost:$port/"
 Write-Host " Press Ctrl+C to stop."
 Write-Host "================================================="
 
@@ -46,7 +54,14 @@ Start-Process "http://localhost:$port/index.html"
 
 try {
     while ($listener.IsListening) {
-        $context = $listener.GetContext()
+        $task = $listener.GetContextAsync()
+        while (!$task.IsCompleted) {
+            Start-Sleep -Milliseconds 200
+            if (!$listener.IsListening) { break }
+        }
+        if (!$task.IsCompleted) { continue }
+        
+        $context = $task.Result
         $request = $context.Request
         $response = $context.Response
         $response.Headers.Add("Cache-Control", "no-store, no-cache, must-revalidate")
@@ -132,4 +147,5 @@ try {
     }
 } finally {
     $listener.Stop()
+    [Environment]::Exit(0)
 }
