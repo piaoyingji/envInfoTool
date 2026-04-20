@@ -1,2 +1,3 @@
-data.csv
-rdp.csv
+*.csv
+# .env file should also be ignored if not already
+.env
