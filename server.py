@@ -34,7 +34,7 @@ def load_env():
 
 CONFIG = load_env()
 PORT = int(CONFIG.get("PORT", "8080"))
-BIND_ADDRESS = CONFIG.get("BIND_ADDRESS", "localhost")
+BIND_ADDRESS = CONFIG.get("BIND_ADDRESS", "0.0.0.0")
 AUTH_PASSWORD = CONFIG.get("AUTH_PASSWORD", "nho1234567")
 RDP_SIGN_THUMBPRINT = CONFIG.get("RDP_SIGN_THUMBPRINT", "").replace(" ", "")
 RDP_CERT_SUBJECT = CONFIG.get("RDP_CERT_SUBJECT", "CN=EnvPortal RDP Signing")
@@ -679,8 +679,11 @@ def main():
 
     print("=================================================")
     print(" EnvPortal - Python Server")
-    print(f" Binding:   http://{BIND_ADDRESS}:{PORT}/")
+    display_bind = "0.0.0.0" if BIND_ADDRESS in ("*", "+", "0.0.0.0") else BIND_ADDRESS
+    print(f" Binding:   http://{display_bind}:{PORT}/")
     print(f" Local URL: http://localhost:{PORT}/index.html")
+    if display_bind == "0.0.0.0":
+        print(f" LAN URL:   http://<this-machine-ip>:{PORT}/index.html")
     print(" Press Ctrl+C to stop.")
     print("=================================================")
     try:

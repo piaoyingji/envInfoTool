@@ -2,7 +2,7 @@
 
 EnvPortal 是一个面向运维和实施人员的轻量级环境档案门户，用来集中维护客户/机构、环境地址、登录信息、数据库信息、远程连接信息和自由标签。
 
-当前版本：`2.0.0`
+当前版本：`2.0.1`
 
 ## 核心能力
 
@@ -38,7 +38,7 @@ Linux / macOS:
 
 ```env
 PORT=8999
-BIND_ADDRESS=localhost
+BIND_ADDRESS=0.0.0.0
 AUTH_PASSWORD=...
 ```
 
@@ -47,6 +47,8 @@ AUTH_PASSWORD=...
 ```text
 http://localhost:8999
 ```
+
+`BIND_ADDRESS=0.0.0.0` 时会监听所有网卡，局域网内可使用本机 IP 访问。
 
 ## 文件说明
 

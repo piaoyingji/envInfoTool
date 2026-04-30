@@ -2,6 +2,13 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.0.1] - 2026-04-30
+
+### Fixed
+
+- Changed the default Python server bind address to `0.0.0.0` so EnvPortal listens on all network interfaces.
+- Updated startup output and README to distinguish local and LAN access URLs.
+
 ## [2.0.0] - 2026-04-30
 
 ### Added
