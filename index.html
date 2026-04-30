@@ -6,17 +6,18 @@
     <title>EnvPortal - 環境検索</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="i18n.js"></script>
     <style>
         .org-summary-card {
-            background-color: var(--card);
+            background: linear-gradient(180deg, #ffffff 0%, #f7fcfd 100%);
             border: 1px solid var(--border);
-            border-radius: 2px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
+            border-radius: 8px;
+            padding: 1.15rem 1.25rem;
+            margin-bottom: 1rem;
             transition: all 0.2s;
         }
         .org-summary-card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            box-shadow: 0 10px 28px rgba(13,55,74,0.1);
             border-color: var(--primary);
         }
         .org-name-header {
@@ -25,27 +26,363 @@
             color: var(--primary);
             cursor: pointer;
             padding: 0.2rem 0.5rem 0.2rem 0.8rem;
-            margin-bottom: 1.25rem;
-            display: block;
+            margin-bottom: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
             border-left: 6px solid var(--primary);
             border-bottom: 1px solid var(--border);
         }
         .org-name-header:hover {
             color: var(--primary-hover);
         }
+        .org-code {
+            color: #9bb2bd;
+            font-size: 1.25rem;
+            font-weight: 700;
+            font-family: "Segoe UI Semibold", "Arial", "Meiryo UI", sans-serif;
+            margin-left: 0.5rem;
+            letter-spacing: 0;
+        }
         .org-badges-wrapper {
-            padding-left: 0.5rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 0.7rem;
         }
         .env-badge {
-            display: inline-block;
-            background-color: var(--bg-subtle);
+            display: block;
+            background: linear-gradient(180deg, #ffffff 0%, #f6fcfd 100%);
             color: var(--text-main);
-            padding: 0.3rem 0.6rem;
+            padding: 0.65rem 0.75rem;
             font-size: 0.85rem;
-            margin-right: 0.5rem;
-            margin-bottom: 0.5rem;
             border: 1px solid var(--border);
-            border-radius: 2px;
+            border-radius: 8px;
+            cursor: pointer;
+            max-height: 180px;
+            transition: opacity 0.42s ease, max-height 0.42s ease, padding 0.42s ease, border-width 0.42s ease, transform 0.42s ease, box-shadow 0.22s ease, background 0.22s ease, border-color 0.22s ease;
+            min-width: 0;
+        }
+        .env-badge:hover {
+            border-color: var(--primary);
+            background: #ecf9fb;
+            box-shadow: 0 6px 18px rgba(8,126,164,0.1);
+            transform: translateY(-1px);
+        }
+        .env-badge.expanded {
+            opacity: 0;
+            max-height: 0;
+            min-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            border-width: 0;
+            overflow: hidden;
+            pointer-events: none;
+            transform: scale(0.98);
+        }
+        .env-summary-main {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            min-width: 0;
+        }
+        .env-summary-name {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+        .env-summary-meta {
+            color: #6b7f8f;
+            font-size: 0.72rem;
+            white-space: nowrap;
+        }
+        .env-summary-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.28rem;
+            margin-top: 0.42rem;
+        }
+        .env-summary-tags .tag-chip {
+            margin: 0;
+            font-size: 0.68rem;
+            padding: 0.08rem 0.38rem;
+        }
+        .env-summary-url {
+            margin-top: 0.35rem;
+            color: #6b7f8f;
+            font-size: 0.72rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .inline-env-card-slot {
+            margin-top: 0.9rem;
+        }
+        .inline-env-card-slot .env-card {
+            width: min(100%, 488px);
+            box-shadow: none;
+            border-color: #b8e2ea;
+            animation: inlineCardIn 0.42s ease both;
+        }
+        @keyframes inlineCardIn {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .nav-org-filter {
+            margin-left: auto;
+            min-width: 320px;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .nav-org-filter label {
+            color: rgba(255,255,255,0.72);
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+        .nav-org-filter select {
+            min-height: 34px;
+            border: 1px solid rgba(255,255,255,0.18);
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        .nav-org-filter select option {
+            color: var(--text-main);
+            background: #fff;
+        }
+        .tag-filter-card {
+            padding: 1rem 1.25rem;
+            border-radius: 10px;
+        }
+        .tag-filter-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 0.8rem;
+        }
+        .tag-filter-title label {
+            color: var(--text-main);
+            font-size: 0.98rem;
+            font-weight: 600;
+        }
+        .tag-filter-hint {
+            color: var(--text-muted);
+            font-size: 0.78rem;
+        }
+        .tag-chip {
+            display: inline-block;
+            border-radius: 4px;
+            padding: 0.15rem 0.45rem;
+            font-size: 0.72rem;
+            font-weight: 500;
+            margin-left: 0.35rem;
+            margin-bottom: 0.25rem;
+        }
+        .tag-chip.auto-tag {
+            font-weight: 700;
+            border-style: solid;
+        }
+        .env-card-title-wrap {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.65rem;
+            margin-bottom: 0.85rem;
+        }
+        .env-card-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .env-card-title-main {
+            min-width: 0;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+        .env-card-tag-row {
+            margin-top: 0.5rem;
+            padding-left: 23px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+        .env-card-tag-row .tag-chip {
+            margin: 0;
+        }
+        .db-title-tags {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+        .db-title-tags .tag-chip {
+            margin: 0;
+        }
+        .tag-filter-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            min-height: 38px;
+        }
+        .tag-filter-btn {
+            border: 1px solid;
+            border-radius: 4px;
+            padding: 0.22rem 0.68rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #fff;
+        }
+        .tag-filter-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(15,23,42,0.08);
+        }
+        .tag-filter-btn.active {
+            color: #fff !important;
+            box-shadow: 0 2px 8px rgba(15,23,42,0.12);
+        }
+        .tag-clear-btn {
+            border: 1px dashed var(--border);
+            background: #fff;
+            color: var(--text-muted);
+            border-radius: 4px;
+            padding: 0.25rem 0.7rem;
+            cursor: pointer;
+        }
+        .tag-empty {
+            color: var(--text-muted);
+            line-height: 38px;
+        }
+        @media (max-width: 860px) {
+            .main-nav-inner {
+                flex-wrap: wrap;
+                gap: 0.75rem;
+                padding-bottom: 0.75rem;
+            }
+            .nav-org-filter {
+                width: 100%;
+                margin-left: 0;
+                min-width: 0;
+            }
+        }
+        .env-org-title {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            font-weight: normal;
+            margin-top: 0.25rem;
+            padding-left: 23px;
+        }
+        .active-org-banner {
+            grid-column: 1 / -1;
+            background: linear-gradient(180deg, #ffffff 0%, #f7fcfd 100%);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 0.25rem;
+            box-shadow: var(--shadow-card);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        .active-org-name {
+            color: var(--primary);
+            font-size: 1.3rem;
+            font-weight: 700;
+            border-left: 5px solid var(--primary);
+            padding-left: 0.75rem;
+        }
+        .active-org-code {
+            color: #9bb2bd;
+            font-size: 1.3rem;
+            font-weight: 700;
+            font-family: "Segoe UI Semibold", "Arial", "Meiryo UI", sans-serif;
+        }
+        .tag-org-section {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .tag-org-section .active-org-banner {
+            margin-bottom: -0.25rem;
+        }
+        .env-status-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin: 0 0 0.9rem;
+        }
+        .env-status-meta span {
+            background: #f5fbfc;
+            border: 1px solid #d7e6ee;
+            color: #627987;
+            border-radius: 4px;
+            padding: 0.15rem 0.45rem;
+            font-size: 0.72rem;
+            font-weight: 500;
+        }
+        .info-subcard {
+            background: linear-gradient(180deg, #f3fbfd 0%, #ffffff 100%);
+            padding: 1rem;
+            border-radius: 6px;
+            border: 1px solid #b8e2ea;
+            margin-top: 1rem;
+        }
+        .db-section-title {
+            color: var(--primary);
+            font-weight: bold;
+            font-size: 0.85rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+        .icon-btn {
+            width: 34px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            border: 1px solid var(--border);
+            color: #315064;
+            border-radius: 6px;
+            margin-left: 0.4rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex: 0 0 auto;
+        }
+        .icon-btn:hover:not(:disabled) {
+            color: var(--primary);
+            border-color: var(--primary);
+            background: #ecf9fb;
+        }
+        .icon-btn:disabled {
+            opacity: 0.38;
+            cursor: not-allowed;
+            background: #f5fbfc;
+        }
+        .disabled-link {
+            color: #9bb2bd !important;
+            text-decoration: none !important;
+            pointer-events: none;
+            cursor: not-allowed;
         }
         .pagination {
             grid-column: 1 / -1;
@@ -83,36 +420,39 @@
         }
     </style>
 </head>
-<body>
+<body data-title-key="app.searchTitle">
     <header class="top-header">
         <div class="logo-area">
             <h1>Env<span>Portal</span></h1>
-            <p>特定の組織の各種テストおよび本番環境のログイン情報をすばやく検索</p>
+            <p data-i18n="header.searchDesc">特定の組織の各種テストおよび本番環境のログイン情報をすばやく検索</p>
         </div>
         <nav class="main-nav">
             <div class="main-nav-inner">
-                <a href="index.html" class="active">環境検索</a>
-                <a href="admin.html">データ管理</a>
-                <a href="rdp.html">RDP情報管理</a>
+                <a href="index.html" class="active" data-i18n="nav.search">環境検索</a>
+                <a href="admin.html" data-i18n="nav.admin">データ管理</a>
+                <a href="rdp.html" data-i18n="nav.rdp">サーバ接続情報管理</a>
+                <div class="nav-org-filter">
+                    <label for="orgSelect" data-i18n="nav.org">対象組織</label>
+                    <select id="orgSelect">
+                        <option value="">-- データ読み込み中... --</option>
+                    </select>
+                </div>
             </div>
         </nav>
     </header>
 
     <div class="container" style="max-width: 1000px; margin: 0 auto; padding: 0 1rem;">
-        <div class="card">
-            <div class="form-group" style="margin-bottom: 0;">
-                <label for="orgSelect" style="color: var(--primary); font-size: 1.05rem;">対象組織を選択</label>
-                <div style="margin-top: 10px;">
-                    <select id="orgSelect" style="padding: 0.8rem; font-size: 1rem;">
-                        <option value="">-- データ読み込み中... --</option>
-                    </select>
-                </div>
+        <div class="card tag-filter-card">
+            <div class="tag-filter-title">
+                <label data-i18n="filter.tags">タグで絞り込み</label>
+                <span class="tag-filter-hint" data-i18n="filter.tagsHint">複数選択で AND 条件</span>
             </div>
+            <div id="tagFilterPanel" class="tag-filter-panel"></div>
         </div>
 
         <div id="resultsArea" class="env-grid">
             <div style="grid-column: 1 / -1;" class="empty-state">
-                データ読み込み中...
+                <span data-i18n="state.loading">データ読み込み中...</span>
             </div>
         </div>
     </div>
@@ -120,25 +460,33 @@
     <!-- パスワード モーダル -->
     <div id="pwdModal" style="display:none;">
         <div class="modal-content">
-            <h3>RDP情報 解除</h3>
-            <p>RDP情報を表示するにはパスワードを入力してください</p>
+            <h3 data-i18n="modal.rdpUnlockTitle">サーバ接続情報 解除</h3>
+            <p data-i18n="modal.rdpUnlockDesc">サーバ接続情報を表示するにはパスワードを入力してください</p>
             <input type="password" id="modalPwdInput" onkeypress="if(event.key==='Enter') submitPwdModal()">
             <div class="modal-btns">
-                <button type="button" class="secondary-btn" onclick="closePwdModal()">キャンセル</button>
-                <button type="button" class="primary-btn" onclick="submitPwdModal()">解除</button>
+                <button type="button" class="secondary-btn" onclick="closePwdModal()" data-i18n="button.cancel">キャンセル</button>
+                <button type="button" class="primary-btn" onclick="submitPwdModal()" data-i18n="button.unlock">解除</button>
             </div>
         </div>
     </div>
 
     <!-- 弹窗提示 -->
-    <div id="toast">コピーしました</div>
+    <div id="toast" data-i18n="toast.copied">コピーしました</div>
 
     <script>
         let fullData = [];
         let rdpData = []; // RDP情報を保持
+        let tagStore = {};
+        let selectedTags = [];
         let isAuthenticated = false; // RDP表示の認証状態
         let currentOrgPage = 1;
+        let statusRefreshTimer = null;
         const ORGS_PER_PAGE = 6;
+        const STATUS_REFRESH_MS = 60000;
+        const AUTO_TAG_PROVIDERS = [
+            autoDbTagsForRow,
+            autoRemoteTagsForRow
+        ];
 
         window.addEventListener('DOMContentLoaded', () => {
             const orgSelect = document.getElementById('orgSelect');
@@ -156,9 +504,13 @@
             // rdp.csv の読み込み
             const p2 = fetch('rdp.csv?t=' + new Date().getTime(), { cache: 'no-store' })
                 .then(res => res.text());
+            const p3 = fetch('tags.json?t=' + new Date().getTime(), { cache: 'no-store' })
+                .then(res => res.ok ? res.json() : {})
+                .catch(() => ({}));
 
-            Promise.all([p1, p2])
-                .then(([dataCsv, rdpCsv]) => {
+            Promise.all([p1, p2, p3])
+                .then(([dataCsv, rdpCsv, tagsJson]) => {
+                    tagStore = normalizeTagStore(tagsJson);
                     // data.csv 解析
                     Papa.parse(dataCsv, {
                         header: true, skipEmptyLines: true,
@@ -173,38 +525,49 @@
                     // 少し待ってから初期化（PapaParseが非同期のためPromise.all内でも少しラグがある場合がある）
                     setTimeout(() => {
                         initDropdown();
+                        renderTagFilters();
                         renderInitialSummary();
                     }, 100);
                 })
                 .catch(error => {
                     console.error('データの取得に失敗しました:', error);
-                    orgSelect.innerHTML = '<option value="">読み込み失敗</option>';
+                    orgSelect.innerHTML = `<option value="">${t('select.loadFailed')}</option>`;
                     orgSelect.disabled = true;
                 });
+        });
+
+        window.addEventListener('i18n:changed', () => {
+            const currentOrg = document.getElementById('orgSelect').value;
+            initDropdown();
+            if (currentOrg && Array.from(document.getElementById('orgSelect').options).some(opt => opt.value === currentOrg)) {
+                document.getElementById('orgSelect').value = currentOrg;
+            }
+            renderTagFilters();
+            renderActiveView();
         });
 
         function initDropdown() {
             const orgSelect = document.getElementById('orgSelect');
             
-            const orgSet = new Set();
+            const orgMap = new Map();
             fullData.forEach(item => {
-                if(item['組織名'] && item['組織名'].trim() !== '') {
-                    orgSet.add(item['組織名'].trim());
-                }
+                const group = getOrgGroup(item);
+                if (!group.isUnset && !orgMap.has(group.key)) orgMap.set(group.key, group);
             });
 
-            orgSelect.innerHTML = '<option value="">▼ 全ての組織の概要を表示</option>';
+            orgSelect.innerHTML = `<option value="">${t('select.allOrgSummary')}</option>`;
             
-            const sortedOrgs = Array.from(orgSet).sort();
+            const sortedOrgs = Array.from(orgMap.values()).sort((a, b) => a.label.localeCompare(b.label));
             
             sortedOrgs.forEach(org => {
                 const opt = document.createElement('option');
-                opt.value = org;
-                opt.textContent = org;
+                opt.value = org.key;
+                opt.textContent = org.label;
                 orgSelect.appendChild(opt);
             });
 
             orgSelect.addEventListener('change', (e) => {
+                currentOrgPage = 1;
                 if (e.target.value === "") {
                     // プルダウンが空になったら初期画面に戻る
                     renderInitialSummary();
@@ -212,6 +575,62 @@
                     renderEnvironments(e.target.value);
                 }
             });
+        }
+
+        function renderTagFilters() {
+            const tagPanel = document.getElementById('tagFilterPanel');
+            const tagSet = new Set();
+            fullData.forEach(row => {
+                allTagsForRow(row).forEach(tag => tagSet.add(tag));
+            });
+
+            tagPanel.innerHTML = '';
+            if (tagSet.size === 0) {
+                tagPanel.innerHTML = `<span class="tag-empty">${t('filter.noTags')}</span>`;
+                return;
+            }
+            Array.from(tagSet).sort().forEach(tag => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'tag-filter-btn' + (selectedTags.includes(tag) ? ' active' : '');
+                btn.textContent = tag;
+                const color = tagColor(tag);
+                btn.style.borderColor = color.border;
+                btn.style.color = color.text;
+                btn.style.backgroundColor = selectedTags.includes(tag) ? color.text : color.bg;
+                btn.onclick = () => toggleTag(tag);
+                tagPanel.appendChild(btn);
+            });
+
+            if (selectedTags.length > 0) {
+                const clearBtn = document.createElement('button');
+                clearBtn.type = 'button';
+                clearBtn.className = 'tag-clear-btn';
+                clearBtn.textContent = t('filter.clear');
+                clearBtn.onclick = () => {
+                    selectedTags = [];
+                    currentOrgPage = 1;
+                    renderTagFilters();
+                    renderActiveView();
+                };
+                tagPanel.appendChild(clearBtn);
+            }
+        }
+
+        function toggleTag(tag) {
+            selectedTags = selectedTags.includes(tag)
+                ? selectedTags.filter(item => item !== tag)
+                : selectedTags.concat(tag);
+            currentOrgPage = 1;
+            renderTagFilters();
+            renderActiveView();
+        }
+
+        function renderActiveView() {
+            const currentOrg = document.getElementById('orgSelect').value;
+            if (currentOrg) renderEnvironments(currentOrg);
+            else if (selectedTags.length > 0) renderTagEnvironments();
+            else renderInitialSummary();
         }
 
         function changePage(direction) {
@@ -226,26 +645,31 @@
             
             document.getElementById('orgSelect').value = '';
 
+            if (selectedTags.length > 0) {
+                renderTagEnvironments();
+                return;
+            }
+
             const orgMap = new Map();
-            fullData.forEach(item => {
-                const org = (item['組織名'] || '').trim();
+            getFilteredData().forEach(item => {
+                const org = getOrgGroup(item);
                 const env = (item['構築環境名'] || '').trim();
-                if (org) {
-                    if (!orgMap.has(org)) {
-                        orgMap.set(org, []);
+                if (!org.isUnset) {
+                    if (!orgMap.has(org.key)) {
+                        orgMap.set(org.key, { ...org, envs: [] });
                     }
                     if (env) {
-                        orgMap.get(org).push(env);
+                        orgMap.get(org.key).envs.push(item);
                     }
                 }
             });
 
             if (orgMap.size === 0) {
-                resultsArea.innerHTML = `<div style="grid-column: 1 / -1;" class="empty-state">データがありません。</div>`;
+                resultsArea.innerHTML = `<div style="grid-column: 1 / -1;" class="empty-state">${t('state.noData')}</div>`;
                 return;
             }
 
-            const allOrgs = Array.from(orgMap.keys()).sort();
+            const allOrgs = Array.from(orgMap.values()).sort((a, b) => a.label.localeCompare(b.label));
             const totalPages = Math.ceil(allOrgs.length / ORGS_PER_PAGE);
 
             if (currentOrgPage > totalPages) currentOrgPage = totalPages;
@@ -259,18 +683,20 @@
             wrapper.style.gridColumn = '1 / -1'; 
             
             orgsToShow.forEach(org => {
-                const envs = orgMap.get(org);
-                const envHtml = envs.map(e => `<span class="env-badge">◆ ${sanitizeHTML(e)}</span>`).join('');
+                const envs = org.envs;
+                const envHtml = envs.map((env, index) => renderEnvSummaryBadge(org.key, env, index)).join('');
                 
                 const card = document.createElement('div');
                 card.className = 'org-summary-card';
                 card.innerHTML = `
-                    <div class="org-name-header" onclick="selectOrg('${sanitizeHTML(org)}')">
-                        ${sanitizeHTML(org)}
+                    <div class="org-name-header" onclick="selectOrg('${escapeJs(org.key)}')">
+                        <span>${sanitizeHTML(org.name)}</span>
+                        ${org.code ? `<span class="org-code">${sanitizeHTML(org.code)}</span>` : ''}
                     </div>
                     <div class="org-badges-wrapper">
                         ${envHtml}
                     </div>
+                    <div id="inline_env_${sanitizeId(org.key)}" class="inline-env-card-slot" onmouseenter="cancelInlineCollapse('${escapeJs(org.key)}')" onmouseleave="scheduleInlineCollapse('${escapeJs(org.key)}')"></div>
                 `;
                 wrapper.appendChild(card);
             });
@@ -282,15 +708,15 @@
                 paginationDiv.className = 'pagination';
                 
                 const prevBtn = document.createElement('button');
-                prevBtn.textContent = '≪ 前へ';
+                prevBtn.textContent = '‹';
                 prevBtn.onclick = () => changePage(-1);
                 if (currentOrgPage === 1) prevBtn.disabled = true;
 
                 const pageSpan = document.createElement('span');
-                pageSpan.textContent = `ページ ${currentOrgPage} / ${totalPages}`;
+                pageSpan.textContent = t('page', { current: currentOrgPage, total: totalPages });
 
                 const nextBtn = document.createElement('button');
-                nextBtn.textContent = '次へ ≫';
+                nextBtn.textContent = '›';
                 nextBtn.onclick = () => changePage(1);
                 if (currentOrgPage === totalPages) nextBtn.disabled = true;
 
@@ -302,169 +728,58 @@
             }
         }
 
-        function selectOrg(orgName) {
-            document.getElementById('orgSelect').value = orgName;
-            renderEnvironments(orgName);
+        function selectOrg(orgKey) {
+            document.getElementById('orgSelect').value = orgKey;
+            renderEnvironments(orgKey);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        function renderEnvironments(selectedOrg) {
+        function renderEnvSummaryBadge(orgKey, env, index) {
+            const envName = sanitizeHTML(env['構築環境名']);
+            const host = sanitizeHTML(getHost(env['URL']));
+            const url = sanitizeHTML(env['URL']);
+            const tags = allTagsForRow(env);
+            const visibleTags = tags.slice(0, 5).map(tag => renderTagChip(tag, tagsForRow(env).includes(tag))).join('');
+            const overflow = tags.length > 5 ? `<span class="tag-chip auto-tag" style="background:#f5fbfc; color:#627987; border:1px solid #d7e6ee;">+${tags.length - 5}</span>` : '';
+            const dbType = String(env['DBタイプ'] || '').trim();
+            const dbVersion = String(env['DBバージョン'] || '').trim();
+            const meta = dbType ? `${sanitizeHTML(dbType)}${dbVersion ? ' ' + sanitizeHTML(dbVersion) : ''}` : (host || '');
+            const badgeId = `env_badge_${sanitizeId(orgKey)}_${index}`;
+            return `
+                <div id="${badgeId}" class="env-badge" onmouseenter="expandInlineEnv('${escapeJs(orgKey)}', ${index})" onclick="expandInlineEnv('${escapeJs(orgKey)}', ${index})">
+                    <div class="env-summary-main">
+                        <span class="env-summary-name">◆ ${envName}</span>
+                        ${meta ? `<span class="env-summary-meta">${meta}</span>` : ''}
+                    </div>
+                    ${tags.length > 0 ? `<div class="env-summary-tags">${visibleTags}${overflow}</div>` : ''}
+                    ${url ? `<div class="env-summary-url">${url}</div>` : ''}
+                </div>
+            `;
+        }
+
+        function renderEnvironments(selectedOrgKey) {
             const resultsArea = document.getElementById('resultsArea');
             resultsArea.innerHTML = ''; 
 
-            const matchedEnvs = fullData.filter(item => {
-                return (item['組織名'] || '').trim() === selectedOrg;
+            const matchedEnvs = getFilteredData().filter(item => {
+                return getOrgGroup(item).key === selectedOrgKey;
             });
 
             if (matchedEnvs.length === 0) {
-                resultsArea.innerHTML = `<div style="grid-column: 1 / -1;" class="empty-state">この組織に関連する環境データはありません。</div>`;
+                resultsArea.innerHTML = `<div style="grid-column: 1 / -1;" class="empty-state">${t('state.noOrgEnv')}</div>`;
                 return;
             }
 
-            matchedEnvs.forEach(env => {
-                const card = document.createElement('div');
-                card.className = 'env-card';
-                
-                const safeUrl = sanitizeHTML(env['URL']);
-                const safeId = sanitizeHTML(env['ログインID']);
-                const safePwd = sanitizeHTML(env['ログインパスワード']);
-                const dbName = sanitizeHTML(env['DB名']);
-                const dbUser = sanitizeHTML(env['DBユーザー名']);
-                const dbPwd = sanitizeHTML(env['DBパスワード']);
-                
-                const pwdId = 'pwd_' + Math.random().toString(36).substr(2, 9);
-                const statusBadgeId = 'status_' + Math.random().toString(36).substr(2, 9);
+            const orgInfo = getOrgGroup(matchedEnvs[0]);
+            const banner = document.createElement('div');
+            banner.className = 'active-org-banner';
+            banner.innerHTML = `
+                <div class="active-org-name">${sanitizeHTML(orgInfo.name)}</div>
+                ${orgInfo.code ? `<div class="active-org-code">${sanitizeHTML(orgInfo.code)}</div>` : ''}
+            `;
+            resultsArea.appendChild(banner);
 
-                // --- IP/Host マッチングロジック ---
-                const envHost = getHost(safeUrl);
-                const matchedRdp = rdpData.find(rdp => getHost(rdp['接続先(IP:Port)']) === envHost && envHost !== '');
-                
-                let rdpTagHtml = '';
-                let rdpInfoHtml = '';
-
-                if (matchedRdp) {
-                    if (isAuthenticated) {
-                        rdpInfoHtml = `
-                            <div style="background-color: var(--bg-subtle); padding: 1rem; border-radius: 2px; border: 1px solid var(--border); margin-top: 1rem;">
-                                <div style="color: var(--primary); font-weight: bold; font-size: 0.85rem; margin-bottom: 0.75rem;">▼ RDP 接続情報</div>
-                                
-                                <div class="env-detail">
-                                    <div class="env-detail-label" style="color:var(--text-main);">ユーザー</div>
-                                    <div class="env-detail-value">${sanitizeHTML(matchedRdp['RDPユーザー名']) || '<span style="color:#aaa;">(未設定)</span>'}</div>
-                                    <button class="copy-btn" onclick="copyText('${sanitizeHTML(matchedRdp['RDPユーザー名'])}')" title="コピー">コピー</button>
-                                </div>
-                                
-                                <div class="env-detail">
-                                    <div class="env-detail-label" style="color:var(--text-main);">Pwd</div>
-                                    <div class="env-detail-value">${sanitizeHTML(matchedRdp['RDPパスワード']) || '<span style="color:#aaa;">(未設定)</span>'}</div>
-                                    <button class="copy-btn" onclick="copyText('${sanitizeHTML(matchedRdp['RDPパスワード'])}')" title="コピー">コピー</button>
-                                </div>
-                                
-                                <div class="env-detail" style="border: none;">
-                                    <div class="env-detail-label" style="color:var(--text-main);">接続先</div>
-                                    <div class="env-detail-value">${sanitizeHTML(matchedRdp['接続先(IP:Port)']) || '<span style="color:#aaa;">(未設定)</span>'}</div>
-                                    <button class="copy-btn" onclick="copyText('${sanitizeHTML(matchedRdp['接続先(IP:Port)'])}')" title="コピー">コピー</button>
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        rdpTagHtml = `<span class="rdp-tag" onclick="openPwdModal()" title="クリックして認証しRDP情報を表示">RDP</span>`;
-                    }
-                }
-                
-                card.innerHTML = `
-                    <h3 style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; margin-bottom: 1rem;">
-                        <span>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: sub;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                            ${sanitizeHTML(env['構築環境名'])}
-                            ${rdpTagHtml}
-                        </span>
-                        <span id="${statusBadgeId}" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 20px; background-color: #f7f7f7; color: #888; font-weight: bold; border: 1px solid #e0e0e0; display: none; align-items: center; gap: 5px;">
-                            <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color:#ccc;"></span>確認中...
-                        </span>
-                    </h3>
-                    
-                    <div class="env-detail-wrapper">
-                        <div class="env-detail">
-                            <div class="env-detail-label">URL</div>
-                            <div class="env-detail-value">
-                                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>
-                            </div>
-                            <button class="copy-btn" onclick="copyText('${safeUrl}')" title="URLをコピー">コピー</button>
-                        </div>
-                        
-                        <div class="env-detail">
-                            <div class="env-detail-label">ID</div>
-                            <div class="env-detail-value">${safeId}</div>
-                            <button class="copy-btn" onclick="copyText('${safeId}')" title="IDをコピー">コピー</button>
-                        </div>
-                        
-                        <div class="env-detail">
-                            <div class="env-detail-label">PWD</div>
-                            <div class="env-detail-value">
-                                <span id="${pwdId}">${safePwd}</span>
-                            </div>
-                            <button class="copy-btn" onclick="copyText('${safePwd}')" title="パスワードをコピー">コピー</button>
-                        </div>
-
-                        <div style="background-color: var(--bg-subtle); padding: 1rem; border-radius: 2px; border: 1px solid var(--border); margin-top: 1rem;">
-                            <div style="color: var(--primary); font-weight: bold; font-size: 0.85rem; margin-bottom: 0.75rem;">▼ データベース情報</div>
-                            
-                            <div class="env-detail">
-                                <div class="env-detail-label" style="color:var(--text-main);">DB名</div>
-                                <div class="env-detail-value">${dbName || '<span style="color:#aaa;">(未設定)</span>'}</div>
-                                <button class="copy-btn" onclick="copyText('${dbName}')" title="DB名をコピー" ${!dbName ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>コピー</button>
-                            </div>
-                            
-                            <div class="env-detail">
-                                <div class="env-detail-label" style="color:var(--text-main);">DBユーザ</div>
-                                <div class="env-detail-value">${dbUser || '<span style="color:#aaa;">(未設定)</span>'}</div>
-                                <button class="copy-btn" onclick="copyText('${dbUser}')" title="DBユーザー名をコピー" ${!dbUser ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>コピー</button>
-                            </div>
-                            
-                            <div class="env-detail" style="border: none;">
-                                <div class="env-detail-label" style="color:var(--text-main);">DB Pwd</div>
-                                <div class="env-detail-value">
-                                    <span>${dbPwd || '<span style="color:#aaa;">(未設定)</span>'}</span>
-                                </div>
-                                <button class="copy-btn" onclick="copyText('${dbPwd}')" title="DBパスワードをコピー" ${!dbPwd ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>コピー</button>
-                            </div>
-                        </div>
-
-                        ${rdpInfoHtml}
-                    </div>
-                `;
-                resultsArea.appendChild(card);
-
-                // Asynchronously ping the URL for real-time status check
-                if (safeUrl) {
-                    const badge = document.getElementById(statusBadgeId);
-                    if (badge) badge.style.display = 'flex';
-                    fetch('ping.jsp?url=' + encodeURIComponent(safeUrl))
-                        .then(res => res.text())
-                        .then(txt => {
-                            if (!badge) return;
-                            if (txt.trim() === '200') {
-                                badge.style.backgroundColor = '#e8f5e9';
-                                badge.style.color = '#2e7d32';
-                                badge.style.border = '1px solid #a5d6a7';
-                                badge.innerHTML = `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color:#4caf50;"></span>稼働中`;
-                            } else {
-                                badge.style.backgroundColor = '#ffebee';
-                                badge.style.color = '#c62828';
-                                badge.style.border = '1px solid #ef9a9a';
-                                badge.innerHTML = `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color:#f44336;"></span>停止 (HTTP ${txt.trim()})`;
-                            }
-                        })
-                        .catch(() => {
-                            if (!badge) return;
-                            badge.style.backgroundColor = '#ffebee';
-                            badge.style.color = '#c62828';
-                            badge.style.border = '1px solid #ef9a9a';
-                            badge.innerHTML = `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color:#f44336;"></span>停止 (エラー)`;
-                        });
-                }
-            });
+            matchedEnvs.forEach(env => renderEnvironmentCard(env, selectedTags.length > 0));
 
             const backBtnWrapper = document.createElement('div');
             backBtnWrapper.style.gridColumn = '1 / -1';
@@ -473,10 +788,480 @@
             backBtnWrapper.style.paddingBottom = '2rem';
             backBtnWrapper.innerHTML = `
                 <button type="button" class="secondary-btn" onclick="renderInitialSummary()">
-                    ≪ 一覧に戻る
+                    ${t('button.backList')}
                 </button>
             `;
             resultsArea.appendChild(backBtnWrapper);
+        }
+
+        function renderTagEnvironments() {
+            const resultsArea = document.getElementById('resultsArea');
+            resultsArea.innerHTML = '';
+
+            const matchedEnvs = getFilteredData();
+            if (matchedEnvs.length === 0) {
+                resultsArea.innerHTML = `<div style="grid-column: 1 / -1;" class="empty-state">${t('state.noTagEnv')}</div>`;
+                return;
+            }
+
+            const orgMap = new Map();
+            matchedEnvs.forEach(env => {
+                const org = getOrgGroup(env);
+                if (!orgMap.has(org.key)) orgMap.set(org.key, { ...org, envs: [] });
+                orgMap.get(org.key).envs.push(env);
+            });
+
+            Array.from(orgMap.values()).sort((a, b) => a.label.localeCompare(b.label)).forEach(org => {
+                const section = document.createElement('div');
+                section.className = 'tag-org-section';
+                section.innerHTML = `
+                    <div class="active-org-banner">
+                        <div class="active-org-name">${sanitizeHTML(org.name)}</div>
+                        ${org.code ? `<div class="active-org-code">${sanitizeHTML(org.code)}</div>` : ''}
+                    </div>
+                `;
+                resultsArea.appendChild(section);
+                org.envs.forEach(env => renderEnvironmentCard(env, false, section));
+            });
+        }
+
+        function renderEnvironmentCard(env, showOrgTitle, targetArea) {
+            const resultsArea = targetArea || document.getElementById('resultsArea');
+            const card = document.createElement('div');
+            card.className = 'env-card';
+
+            const org = getOrgGroup(env);
+            const safeUrl = sanitizeHTML(env['URL']);
+            const safeId = sanitizeHTML(env['ログインID']);
+            const safePwd = sanitizeHTML(env['ログインパスワード']);
+            const dbName = sanitizeHTML(env['DB名']);
+            const dbType = sanitizeHTML(env['DBタイプ']);
+            const dbVersion = sanitizeHTML(env['DBバージョン']);
+            const dbUser = sanitizeHTML(env['DBユーザー名']);
+            const dbPwd = sanitizeHTML(env['DBパスワード']);
+            const orgTitleHtml = showOrgTitle ? `<span class="env-org-title">${sanitizeHTML(org.label)}</span>` : '';
+            const manualTagSet = new Set(tagsForRow(env));
+            const tagHtml = allTagsForRow(env).map(tag => renderTagChip(tag, manualTagSet.has(tag))).join('');
+            const dbAutoTagHtml = autoDbTagsForRow(env).map(tag => renderTagChip(tag, false)).join('');
+
+            const statusBadgeId = 'status_' + Math.random().toString(36).substr(2, 9);
+            const statusMetaId = 'meta_' + Math.random().toString(36).substr(2, 9);
+            const urlLinkId = 'url_' + Math.random().toString(36).substr(2, 9);
+            const browseBtnId = 'browse_' + Math.random().toString(36).substr(2, 9);
+            const rdpDownloadBtnId = 'rdpdl_' + Math.random().toString(36).substr(2, 9);
+            const rdpCertBtnId = 'rdpcert_' + Math.random().toString(36).substr(2, 9);
+
+            const envHost = getHost(safeUrl);
+            const matchedRdp = rdpData.find(rdp => getHost(rdp['接続先(IP:Port)']) === envHost && envHost !== '');
+            const remoteType = matchedRdp ? detectRemoteType(matchedRdp) : '';
+            const remoteTagHtml = remoteType ? renderTagChip(remoteType, false) : '';
+            const remoteTarget = matchedRdp ? sanitizeHTML(matchedRdp['接続先(IP:Port)']) : '';
+            const remoteUser = matchedRdp ? sanitizeHTML(matchedRdp['RDPユーザー名']) : '';
+            const rdpDownloadBtn = matchedRdp && remoteType === 'RDP' && remoteTarget
+                ? `<button id="${rdpDownloadBtnId}" class="icon-btn" disabled onclick="connectRdp('${escapeJs(matchedRdp['接続先(IP:Port)'])}', '${escapeJs(matchedRdp['RDPユーザー名'])}', '${escapeJs(matchedRdp['RDPパスワード'])}')" title="${t('button.connectRdp')}" aria-label="${t('button.connectRdp')}">${remoteConnectIcon()}</button>`
+                : '';
+            const rdpCertBtn = matchedRdp && remoteType === 'RDP'
+                ? `<button id="${rdpCertBtnId}" class="icon-btn" disabled onclick="downloadRdpSigningCert()" title="${t('button.downloadRdpCert')}" aria-label="${t('button.downloadRdpCert')}">${certificateIcon()}</button>`
+                : '';
+
+            let rdpTagHtml = '';
+            let rdpInfoHtml = '';
+
+            if (matchedRdp) {
+                if (isAuthenticated) {
+                    rdpInfoHtml = `
+                        <div class="info-subcard">
+                            <div class="db-section-title">
+                                <span>${t('section.rdp')}</span>
+                                ${remoteTagHtml ? `<span class="db-title-tags">${remoteTagHtml}</span>` : ''}
+                            </div>
+                            <div class="env-detail">
+                                <div class="env-detail-label" style="color:var(--text-main);">${t('label.remoteUser')}</div>
+                                <div class="env-detail-value">${remoteUser || `<span style="color:#aaa;">${t('unset.value')}</span>`}</div>
+                                <button class="icon-btn" onclick="copyText('${sanitizeHTML(matchedRdp['RDPユーザー名'])}')" title="${t('button.copy')}" aria-label="${t('button.copy')}">${copyIcon()}</button>
+                            </div>
+                            <div class="env-detail">
+                                <div class="env-detail-label" style="color:var(--text-main);">${t('label.remotePassword')}</div>
+                                <div class="env-detail-value">${sanitizeHTML(matchedRdp['RDPパスワード']) || `<span style="color:#aaa;">${t('unset.value')}</span>`}</div>
+                                <button class="icon-btn" onclick="copyText('${sanitizeHTML(matchedRdp['RDPパスワード'])}')" title="${t('button.copy')}" aria-label="${t('button.copy')}">${copyIcon()}</button>
+                            </div>
+                            <div class="env-detail" style="border: none;">
+                                <div class="env-detail-label" style="color:var(--text-main);">${t('label.connection')}</div>
+                                <div class="env-detail-value">${remoteTarget || `<span style="color:#aaa;">${t('unset.value')}</span>`}</div>
+                                ${rdpDownloadBtn}
+                                ${rdpCertBtn}
+                                <button class="icon-btn" onclick="copyText('${sanitizeHTML(matchedRdp['接続先(IP:Port)'])}')" title="${t('button.copy')}" aria-label="${t('button.copy')}">${copyIcon()}</button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    rdpTagHtml = `<span class="rdp-tag" onclick="openPwdModal()" title="${t('modal.rdpUnlockDesc')}">${remoteType || t('label.remoteAccess')}</span>`;
+                }
+            }
+
+            card.innerHTML = `
+                <div class="env-card-title-wrap">
+                    <div class="env-card-title-row">
+                    <span class="env-card-title-main">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: sub;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        ${sanitizeHTML(env['構築環境名'])}
+                        ${rdpTagHtml}
+                        ${orgTitleHtml}
+                    </span>
+                    <span id="${statusBadgeId}" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 20px; background-color: #f7f7f7; color: #888; font-weight: bold; border: 1px solid #e0e0e0; display: none; align-items: center; gap: 5px;">
+                        <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color:#ccc;"></span>${t('status.checking')}
+                    </span>
+                    </div>
+                    ${tagHtml ? `<div class="env-card-tag-row">${tagHtml}</div>` : ''}
+                </div>
+                <div id="${statusMetaId}" class="env-status-meta"></div>
+                <div class="env-detail-wrapper">
+                    <div class="env-detail">
+                        <div class="env-detail-label">${t('label.url')}</div>
+                        <div class="env-detail-value"><a id="${urlLinkId}" href="${safeUrl}" data-href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a></div>
+                        <button id="${browseBtnId}" class="icon-btn" type="button" data-url="${safeUrl}" onclick="openBrowse(this)" title="Browse" aria-label="Browse">${globeIcon()}</button>
+                        <button class="icon-btn" onclick="copyText('${safeUrl}')" title="${t('button.copy')}" aria-label="${t('button.copy')}">${copyIcon()}</button>
+                    </div>
+                    <div class="env-detail">
+                        <div class="env-detail-label">ID</div>
+                        <div class="env-detail-value">${safeId}</div>
+                        <button class="icon-btn" onclick="copyText('${safeId}')" title="${t('button.copy')}" aria-label="${t('button.copy')}">${copyIcon()}</button>
+                    </div>
+                    <div class="env-detail">
+                        <div class="env-detail-label">${t('label.password')}</div>
+                        <div class="env-detail-value"><span>${safePwd}</span></div>
+                        <button class="icon-btn" onclick="copyText('${safePwd}')" title="${t('button.copy')}" aria-label="${t('button.copy')}">${copyIcon()}</button>
+                    </div>
+                    <div class="info-subcard">
+                        <div class="db-section-title">
+                            <span>${t('section.db')}</span>
+                            ${dbAutoTagHtml ? `<span class="db-title-tags">${dbAutoTagHtml}</span>` : ''}
+                        </div>
+                        <div class="env-detail">
+                            <div class="env-detail-label" style="color:var(--text-main);">DB名</div>
+                            <div class="env-detail-value">${dbName || `<span style="color:#aaa;">${t('unset.value')}</span>`}</div>
+                            <button class="icon-btn" onclick="copyText('${dbName}')" title="${t('button.copy')}" aria-label="${t('button.copy')}" ${!dbName ? 'disabled' : ''}>${copyIcon()}</button>
+                        </div>
+                        <div class="env-detail">
+                            <div class="env-detail-label" style="color:var(--text-main);">DBユーザ</div>
+                            <div class="env-detail-value">${dbUser || `<span style="color:#aaa;">${t('unset.value')}</span>`}</div>
+                            <button class="icon-btn" onclick="copyText('${dbUser}')" title="${t('button.copy')}" aria-label="${t('button.copy')}" ${!dbUser ? 'disabled' : ''}>${copyIcon()}</button>
+                        </div>
+                        <div class="env-detail" style="border: none;">
+                            <div class="env-detail-label" style="color:var(--text-main);">${t('label.dbPwd')}</div>
+                            <div class="env-detail-value"><span>${dbPwd || `<span style="color:#aaa;">${t('unset.value')}</span>`}</span></div>
+                            <button class="icon-btn" onclick="copyText('${dbPwd}')" title="${t('button.copy')}" aria-label="${t('button.copy')}" ${!dbPwd ? 'disabled' : ''}>${copyIcon()}</button>
+                        </div>
+                    </div>
+                    ${rdpInfoHtml}
+                </div>
+            `;
+            resultsArea.appendChild(card);
+
+            if (safeUrl) {
+                card.dataset.statusUrl = safeUrl;
+                card.dataset.statusBadgeId = statusBadgeId;
+                card.dataset.statusMetaId = statusMetaId;
+                card.dataset.urlLinkId = urlLinkId;
+                card.dataset.browseBtnId = browseBtnId;
+                card.dataset.rdpDownloadBtnId = rdpDownloadBtn ? rdpDownloadBtnId : '';
+                card.dataset.rdpCertBtnId = rdpCertBtn ? rdpCertBtnId : '';
+                updateStatusBadge(statusBadgeId, statusMetaId, safeUrl, urlLinkId, browseBtnId, card.dataset.rdpDownloadBtnId, card.dataset.rdpCertBtnId);
+                scheduleStatusRefresh();
+            }
+        }
+
+        function expandInlineEnv(orgKey, envIndex) {
+            cancelInlineCollapse(orgKey);
+            const slot = document.getElementById('inline_env_' + sanitizeId(orgKey));
+            if (!slot) return;
+            const envs = getFilteredData().filter(item => getOrgGroup(item).key === orgKey);
+            const env = envs[envIndex];
+            if (!env) return;
+            restoreInlineBadges(orgKey);
+            const badge = document.getElementById(`env_badge_${sanitizeId(orgKey)}_${envIndex}`);
+            if (badge) badge.classList.add('expanded');
+            slot.innerHTML = '';
+            renderEnvironmentCard(env, false, slot);
+            scheduleInlineCollapse(orgKey);
+            slot.onmouseenter = () => cancelInlineCollapse(orgKey);
+            slot.onmouseleave = () => scheduleInlineCollapse(orgKey);
+        }
+
+        function scheduleInlineCollapse(orgKey) {
+            const slot = document.getElementById('inline_env_' + sanitizeId(orgKey));
+            if (!slot) return;
+            cancelInlineCollapse(orgKey);
+            slot.dataset.collapseTimer = String(setTimeout(() => {
+                slot.innerHTML = '';
+                restoreInlineBadges(orgKey);
+                delete slot.dataset.collapseTimer;
+            }, 30000));
+        }
+
+        function restoreInlineBadges(orgKey) {
+            const prefix = `env_badge_${sanitizeId(orgKey)}_`;
+            document.querySelectorAll(`[id^="${prefix}"]`).forEach(badge => badge.classList.remove('expanded'));
+        }
+
+        function cancelInlineCollapse(orgKey) {
+            const slot = document.getElementById('inline_env_' + sanitizeId(orgKey));
+            if (slot && slot.dataset.collapseTimer) {
+                clearTimeout(Number(slot.dataset.collapseTimer));
+                delete slot.dataset.collapseTimer;
+            }
+        }
+
+        function sanitizeId(str) {
+            return String(str || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+        }
+
+        function scheduleStatusRefresh() {
+            if (statusRefreshTimer) clearTimeout(statusRefreshTimer);
+            statusRefreshTimer = setTimeout(() => {
+                refreshVisibleStatuses();
+                scheduleStatusRefresh();
+            }, STATUS_REFRESH_MS);
+        }
+
+        function refreshVisibleStatuses() {
+            document.querySelectorAll('[data-status-url]').forEach(el => {
+                updateStatusBadge(el.dataset.statusBadgeId, el.dataset.statusMetaId, el.dataset.statusUrl, el.dataset.urlLinkId, el.dataset.browseBtnId, el.dataset.rdpDownloadBtnId, el.dataset.rdpCertBtnId);
+            });
+        }
+
+        function updateStatusBadge(statusBadgeId, statusMetaId, safeUrl, urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId) {
+            const badge = document.getElementById(statusBadgeId);
+            const meta = document.getElementById(statusMetaId);
+            const startedAt = performance.now();
+            const signal = AbortSignal.timeout ? AbortSignal.timeout(1800) : undefined;
+            if (badge) badge.style.display = 'flex';
+            fetch('env_check.jsp?url=' + encodeURIComponent(safeUrl), signal ? { signal } : {})
+                .then(res => res.text())
+                .then(text => {
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        throw new Error('env_check returned non-json');
+                    }
+                })
+                .then(info => {
+                    if (!badge) return;
+                    const status = String(info.status || '').trim();
+                    renderStatusBadge(badge, status);
+                    updateUrlAccess(status, urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId);
+                    if (status === 'ERROR') {
+                        throw new Error('env_check status error');
+                    }
+                    if (meta) {
+                        const parts = [];
+                        parts.push(t('status.http', { status }));
+                        if (info.elapsedMs || info.elapsedMs === 0) parts.push(t('status.responseTime', { ms: info.elapsedMs }));
+                        const headerGuess = info.platform && info.platform !== 'Unknown' ? info.platform : '';
+                        const ttlGuess = info.ttlGuess && info.ttlGuess !== 'Unknown' ? info.ttlGuess : '';
+                        const bestGuess = headerGuess || ttlGuess;
+                        if (bestGuess) {
+                            parts.push(`${t('status.osGuess')}: ${sanitizeHTML(bestGuess)}`);
+                        }
+                        if (info.ttl) parts.push(t('status.ttl', { ttl: sanitizeHTML(info.ttl) }));
+                        if (info.server) parts.push(`${t('status.server')}: ${sanitizeHTML(info.server)}`);
+                        if (info.poweredBy) parts.push(sanitizeHTML(info.poweredBy));
+                        meta.innerHTML = parts.map(part => `<span>${part}</span>`).join('');
+                    }
+                })
+                .catch(() => {
+                    fetch('ping.jsp?url=' + encodeURIComponent(safeUrl), signal ? { signal } : {})
+                        .then(res => res.text())
+                        .then(txt => {
+                            if (!badge) return;
+                            const status = txt.trim();
+                            renderStatusBadge(badge, status);
+                            updateUrlAccess(status, urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId);
+                            if (meta) {
+                                const elapsed = Math.round(performance.now() - startedAt);
+                                meta.innerHTML = [
+                                    t('status.basicCheck'),
+                                    t('status.http', { status }),
+                                    t('status.responseTime', { ms: elapsed })
+                                ].map(part => `<span>${part}</span>`).join('');
+                            }
+                        })
+                        .catch(() => {
+                            if (!badge) return;
+                            renderStatusBadge(badge, 'ERROR');
+                            updateUrlAccess('ERROR', urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId);
+                            if (meta) {
+                                const elapsed = Math.round(performance.now() - startedAt);
+                                meta.innerHTML = [
+                                    t('status.basicCheck'),
+                                    t('status.http', { status: 'ERROR' }),
+                                    t('status.responseTime', { ms: elapsed })
+                                ].map(part => `<span>${part}</span>`).join('');
+                            }
+                        });
+                });
+        }
+
+        function updateUrlAccess(status, urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId) {
+            const isAvailable = String(status).trim() === '200';
+            const link = document.getElementById(urlLinkId);
+            const browseBtn = document.getElementById(browseBtnId);
+            const rdpDownloadBtn = document.getElementById(rdpDownloadBtnId);
+            const rdpCertBtn = document.getElementById(rdpCertBtnId);
+            if (link) {
+                if (isAvailable) {
+                    link.href = link.dataset.href || link.textContent;
+                    link.classList.remove('disabled-link');
+                } else {
+                    link.removeAttribute('href');
+                    link.classList.add('disabled-link');
+                }
+            }
+            if (browseBtn) browseBtn.disabled = !isAvailable;
+            if (rdpDownloadBtn) rdpDownloadBtn.disabled = !isAvailable;
+            if (rdpCertBtn) rdpCertBtn.disabled = !isAvailable;
+        }
+
+        function openBrowse(button) {
+            if (!button.disabled && button.dataset.url) {
+                window.open(button.dataset.url, '_blank', 'noopener,noreferrer');
+            }
+        }
+
+        function copyIcon() {
+            return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+        }
+
+        function globeIcon() {
+            return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 0 1 0 20"></path><path d="M12 2a15.3 15.3 0 0 0 0 20"></path></svg>';
+        }
+
+        function downloadIcon() {
+            return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="M7 10l5 5 5-5"></path><path d="M12 15V3"></path></svg>';
+        }
+
+        function remoteConnectIcon() {
+            return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="8" height="6" rx="1"></rect><rect x="13" y="14" width="8" height="6" rx="1"></rect><path d="M7 10v2a2 2 0 0 0 2 2h4"></path><path d="m11 12 2 2-2 2"></path></svg>';
+        }
+
+        function certificateIcon() {
+            return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-5"></path></svg>';
+        }
+
+        function downloadRdpSigningCert() {
+            window.open('rdp_signing_cert.cer', '_blank', 'noopener,noreferrer');
+        }
+
+        function connectRdp(target, user, password) {
+            const params = new URLSearchParams();
+            params.set('target', target || '');
+            params.set('user', user || '');
+            params.set('password', password || '');
+
+            copyRdpPasswordToClipboard(password)
+                .then(() => fetch('rdp_connect.jsp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString()
+                }))
+                .then(res => res.json().then(data => ({ ok: res.ok && data.ok, data })))
+                .then(({ ok, data }) => {
+                    if (!ok) throw new Error(data.message || 'RDP connect failed');
+                    showToast(t('toast.rdpConnecting'));
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert(t('error.network'));
+                });
+        }
+
+        function copyRdpPasswordToClipboard(password) {
+            const value = String(password || '');
+            if (!value) return Promise.resolve();
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                return navigator.clipboard.writeText(value)
+                    .then(() => showToast(t('toast.passwordCopiedForRdp')))
+                    .catch(() => fallbackCopyRdpPassword(value));
+            }
+            return fallbackCopyRdpPassword(value);
+        }
+
+        function fallbackCopyRdpPassword(password) {
+            return new Promise(resolve => {
+                const textArea = document.createElement('textarea');
+                textArea.value = password;
+                textArea.style.position = 'fixed';
+                textArea.style.top = '-9999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast(t('toast.passwordCopiedForRdp'));
+                } finally {
+                    document.body.removeChild(textArea);
+                    resolve();
+                }
+            });
+        }
+
+        function downloadRdpFile(target, user, password, orgName, envName) {
+            const params = new URLSearchParams();
+            params.set('target', target || '');
+            params.set('user', user || '');
+            params.set('password', password || '');
+            params.set('org', orgName || '');
+            params.set('env', envName || '');
+
+            fetch('rdp_file.jsp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString()
+            })
+                .then(res => {
+                    if (!res.ok) throw new Error('RDP file generation failed');
+                    return res.blob().then(blob => ({ blob, disposition: res.headers.get('Content-Disposition') || '' }));
+                })
+                .then(({ blob, disposition }) => {
+                    const nameMatch = disposition.match(/filename\*=UTF-8''([^;]+)/);
+                    const filename = nameMatch ? decodeURIComponent(nameMatch[1]) : `${safeFilePart(orgName)}_${safeFilePart(envName)}.rdp`;
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                    showToast(t('toast.rdpDownloaded'));
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert(t('error.network'));
+                });
+        }
+
+        function safeFilePart(value) {
+            return String(value || 'remote').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'remote';
+        }
+
+        function renderStatusBadge(badge, status) {
+            if (status === '200') {
+                badge.style.backgroundColor = '#e8f5e9';
+                badge.style.color = '#2e7d32';
+                badge.style.border = '1px solid #a5d6a7';
+                badge.innerHTML = `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color:#4caf50;"></span>${t('status.up')}`;
+            } else if (status && status !== 'ERROR') {
+                badge.style.backgroundColor = '#ffebee';
+                badge.style.color = '#c62828';
+                badge.style.border = '1px solid #ef9a9a';
+                badge.innerHTML = `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color:#f44336;"></span>${t('status.down')} (HTTP ${status})`;
+            } else {
+                badge.style.backgroundColor = '#ffebee';
+                badge.style.color = '#c62828';
+                badge.style.border = '1px solid #ef9a9a';
+                badge.innerHTML = `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color:#f44336;"></span>${t('status.error')}`;
+            }
         }
 
         function sanitizeHTML(str) {
@@ -484,6 +1269,134 @@
             const temp = document.createElement('div');
             temp.textContent = str;
             return temp.innerHTML;
+        }
+
+        function normalizeTagStore(tagsJson) {
+            if (!tagsJson || typeof tagsJson !== 'object') return {};
+            if (tagsJson.records && typeof tagsJson.records === 'object') return tagsJson.records;
+            return tagsJson;
+        }
+
+        function getRowKey(row) {
+            return [
+                row['組織コード'] || '',
+                row['組織名'] || '',
+                row['構築環境名'] || '',
+                row['URL'] || '',
+                row['ログインID'] || ''
+            ].map(value => String(value).trim()).join('||');
+        }
+
+        function tagsForRow(row) {
+            const record = tagStore[getRowKey(row)] || tagStore[getLegacyRowKey(row)];
+            if (Array.isArray(record)) return record;
+            if (record && Array.isArray(record.tags)) return record.tags;
+            return [];
+        }
+
+        function autoDbTagsForRow(row) {
+            const type = String(row['DBタイプ'] || '').trim();
+            const version = String(row['DBバージョン'] || '').trim();
+            const tags = [];
+            if (type) tags.push(type);
+            if (type && version) tags.push(`${type} ${version}`);
+            else if (version) tags.push(`DB ${version}`);
+            return tags;
+        }
+
+        function autoRemoteTagsForRow(row) {
+            const envHost = getHost(row['URL']);
+            if (!envHost) return [];
+            const matched = rdpData.find(remote => getHost(remote['接続先(IP:Port)']) === envHost);
+            const type = matched ? detectRemoteType(matched) : '';
+            return type ? [type] : [];
+        }
+
+        function detectRemoteType(remote) {
+            const explicitType = String(remote['接続タイプ'] || remote['接続種別'] || remote['タイプ'] || '').trim();
+            if (explicitType) return explicitType.toUpperCase();
+            const target = String(remote['接続先(IP:Port)'] || '');
+            const portMatch = target.match(/:(\d+)\s*$/);
+            const port = portMatch ? portMatch[1] : '';
+            if (port === '22') return 'SSH';
+            if (port === '3389') return 'RDP';
+            return '';
+        }
+
+        function autoTagsForRow(row) {
+            return AUTO_TAG_PROVIDERS
+                .flatMap(provider => provider(row))
+                .filter(Boolean);
+        }
+
+        function allTagsForRow(row) {
+            return uniqueTags(tagsForRow(row).concat(autoTagsForRow(row)));
+        }
+
+        function uniqueTags(tags) {
+            const seen = new Set();
+            return tags.filter(tag => {
+                const key = String(tag || '').trim();
+                if (!key || seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        }
+
+        function getFilteredData() {
+            if (selectedTags.length === 0) return fullData;
+            return fullData.filter(row => {
+                const rowTags = allTagsForRow(row);
+                return selectedTags.every(tag => rowTags.includes(tag));
+            });
+        }
+
+        function tagColor(tag) {
+            const palette = [
+                { bg: '#ecf9fb', text: '#087ea4', border: '#b8e2ea' },
+                { bg: '#ecfdf5', text: '#047857', border: '#a7f3d0' },
+                { bg: '#fff7ed', text: '#d97706', border: '#fed7aa' },
+                { bg: '#fdf2f8', text: '#db2777', border: '#fbcfe8' },
+                { bg: '#f5f3ff', text: '#6d28d9', border: '#ddd6fe' },
+                { bg: '#eefdf8', text: '#0f766e', border: '#99f6e4' },
+                { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' }
+            ];
+            let hash = 0;
+            for (let i = 0; i < tag.length; i++) hash += tag.charCodeAt(i);
+            return palette[Math.abs(hash) % palette.length];
+        }
+
+        function renderTagChip(tag, isManual = true) {
+            const color = tagColor(tag);
+            const className = 'tag-chip' + (isManual ? '' : ' auto-tag');
+            return `<span class="${className}" style="background:${color.bg}; color:${color.text}; border:1px solid ${color.border};">${sanitizeHTML(tag)}</span>`;
+        }
+
+        function getLegacyRowKey(row) {
+            return [
+                row['組織名'] || '',
+                row['構築環境名'] || '',
+                row['URL'] || '',
+                row['ログインID'] || ''
+            ].map(value => String(value).trim()).join('||');
+        }
+
+        function getOrgGroup(row) {
+            const code = (row['組織コード'] || '').trim();
+            const name = (row['組織名'] || '').trim();
+            const isUnset = code === '' && name === '';
+            const displayName = name || t('unset.name');
+            return {
+                key: isUnset ? '__unset__' : (code || `name:${name}`),
+                code,
+                name: isUnset ? t('unset.org') : displayName,
+                label: isUnset ? t('unset.org') : (code ? `${code} - ${displayName}` : displayName),
+                isUnset
+            };
+        }
+
+        function escapeJs(str) {
+            return String(str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         }
 
         // --- RDP追加機能用関数 ---
@@ -525,27 +1438,27 @@
                     localStorage.setItem('authExpiry', new Date().getTime() + 15 * 60 * 1000);
                     isAuthenticated = true;
                     closePwdModal();
-                    showToast("認証成功！RDP情報を表示します。");
+                    showToast(t('toast.rdpAuthOk'));
                     // 現在の表示を更新
                     const currentOrg = document.getElementById('orgSelect').value;
                     if (currentOrg) renderEnvironments(currentOrg);
                     else renderInitialSummary();
                 } else {
-                    alert("パスワードが正しくありません。");
+                    alert(t('error.authWrong'));
                     document.getElementById('modalPwdInput').value = '';
                     document.getElementById('modalPwdInput').focus();
                 }
             })
             .catch(err => {
                 console.error(err);
-                alert("認証エラーが発生しました。");
+                alert(t('error.auth'));
             });
         }
 
         function copyText(text) {
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(text).then(() => {
-                    showToast('コピーしました: ' + text);
+                    showToast(t('toast.copied') + ': ' + text);
                 }).catch(err => {
                     console.error('コピー失敗:', err);
                     fallbackCopyText(text);
@@ -567,13 +1480,13 @@
                 const successful = document.execCommand("copy");
                 document.body.removeChild(textArea);
                 if (successful) {
-                    showToast('コピーしました: ' + text);
+                    showToast(t('toast.copied') + ': ' + text);
                 } else {
-                    showToast('コピーに失敗しました。手動でコピーしてください。');
+                    showToast(t('error.network'));
                 }
             } catch (err) {
                 console.error('Fallbackコピー失敗:', err);
-                showToast('コピーに失敗しました。手動でコピーしてください。');
+                showToast(t('error.network'));
             }
         }
 

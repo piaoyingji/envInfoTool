@@ -1,3 +1,6 @@
 *.csv
 # .env file should also be ignored if not already
 .env
+__pycache__/
+.tmp/
+*.pyc

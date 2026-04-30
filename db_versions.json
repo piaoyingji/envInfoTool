@@ -1,0 +1,14 @@
+{
+  "types": [
+    {
+      "id": "oracle",
+      "label": "Oracle",
+      "versions": ["11", "12", "18", "19"]
+    },
+    {
+      "id": "postgresql",
+      "label": "PostgreSQL",
+      "versions": ["15", "16", "17", "18", "19"]
+    }
+  ]
+}

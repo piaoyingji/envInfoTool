@@ -3,54 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EnvPortal - RDP情報管理</title>
+    <title>EnvPortal - サーバ接続情報管理</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="i18n.js"></script>
     <style>
         .actions-bar {
             background-color: var(--card);
             border: 1px solid var(--border);
-            padding: 1.25rem 1.5rem;
-            margin-bottom: 2rem;
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.5rem;
             display: flex;
             align-items: center;
             gap: 1rem;
             position: sticky;
             top: 0;
             z-index: 100;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-            border-top: 3px solid var(--primary);
+            box-shadow: var(--shadow-card);
+        }
+        .rdp-toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .rdp-stat {
+            color: var(--text-muted);
+            font-size: 0.86rem;
+            white-space: nowrap;
+        }
+        .rdp-stat strong {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+        .toolbar-pagination {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .toolbar-pagination button {
+            min-height: 34px;
+            min-width: 34px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: #fff;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .toolbar-pagination button:hover:not(:disabled) {
+            color: var(--primary);
+            border-color: var(--primary);
+        }
+        .toolbar-pagination button:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+        .toolbar-pagination span {
+            color: var(--text-muted);
+            font-size: 0.86rem;
+            min-width: 76px;
+            text-align: center;
+        }
+        .org-card {
+            padding: 0;
+            overflow: hidden;
+        }
+        .org-block-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            border-bottom: 1px solid #e6f0f5;
+            padding: 1rem 1.25rem;
+            background: linear-gradient(180deg, #ffffff 0%, #f6fcfd 100%);
         }
         .org-header-title {
             font-size: 1.25rem;
             font-weight: bold;
+            color: var(--primary);
+            border-left: 4px solid var(--primary);
+            padding-left: 0.75rem;
+            margin: 0;
+        }
+        .rdp-card-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+            gap: 1.25rem;
+            padding: 1rem 1.25rem 1.25rem;
+        }
+        .rdp-editor-card {
+            background: linear-gradient(180deg, #f0fafc 0%, #ffffff 46%, #ffffff 100%);
+            border: 1px solid #c8e5ec;
+            border-radius: 12px;
+            box-shadow: 0 12px 32px rgba(13, 55, 74, 0.09);
+            overflow: hidden;
+        }
+        .rdp-editor-card-header {
+            padding: 0.85rem 1rem;
+            background: linear-gradient(180deg, #f7fcfd 0%, #eaf8fb 100%);
+            border-bottom: 1px solid #dcebf1;
+        }
+        .rdp-editor-card-title {
             color: var(--text-main);
-            border-left: 6px solid var(--primary);
-            border-bottom: 2px solid var(--border);
-            padding-left: 0.8rem;
-            padding-bottom: 0.5rem;
-            margin-bottom: 1rem;
+            font-weight: 700;
+            font-size: 1rem;
         }
-        .editor-grid {
-            display: grid; 
-            grid-template-columns: 2fr 1.5fr 1.5fr 3fr auto; 
-            gap: 0.5rem; 
-            align-items: center; 
-            background-color: #ffffff; 
-            padding: 0.75rem 0.5rem; 
-            border-bottom: 1px dashed var(--border);
-            margin-bottom: 0;
+        .rdp-editor-body {
+            padding: 1rem;
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 0.85rem;
         }
-        .editor-grid:nth-child(even) {
-            background-color: var(--bg-subtle);
+        .edit-field {
+            min-width: 0;
         }
-        .editor-grid input {
-            padding: 0.45rem; 
+        .edit-field.span-6 { grid-column: span 6; }
+        .edit-field.span-4 { grid-column: span 4; }
+        .edit-field.span-8 { grid-column: span 8; }
+        .edit-field.span-12 { grid-column: span 12; }
+        .edit-field input,
+        .edit-field select {
+            width: 100%;
+            min-height: 38px;
+            padding: 0.45rem 0.6rem;
             font-size: 0.85rem;
             background-color: #ffffff;
-            border: 1px solid #cccccc;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .editor-grid label {
+        .edit-field input:focus,
+        .edit-field select:focus {
+            outline: none;
+            border-color: #39b8cc;
+            box-shadow: 0 0 0 3px rgba(8,126,164,0.15);
+        }
+        .edit-field label {
             font-size: 0.75rem; 
             font-weight: bold;
             color: var(--text-muted);
@@ -58,20 +147,28 @@
             display: block;
             white-space: nowrap;
         }
+        .rdp-editor-card-footer {
+            display: flex;
+            justify-content: flex-end;
+            padding: 0.8rem 1rem;
+            border-top: 1px solid #dcebf1;
+            background: #f6fcfd;
+        }
         .del-btn {
             background: #ffffff;
-            color: #cc0000; 
-            border: 1px solid #cc0000; 
-            padding: 0.25rem 0.5rem; 
-            border-radius: 2px; 
+            color: #ff4d4f; 
+            border: 1px solid #ffccc7; 
+            padding: 0.45rem 0.8rem; 
+            border-radius: 6px; 
             cursor: pointer;
-            font-size: 0.75rem;
-            font-weight: bold;
-            margin-top: 18px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin-top: 0;
             transition: all 0.2s;
         }
         .del-btn:hover {
-            background-color: #cc0000;
+            background-color: #ff4d4f;
+            border-color: #ff4d4f;
             color: white;
         }
         .pagination {
@@ -106,19 +203,31 @@
             font-size: 0.9rem;
             font-weight: bold;
         }
+        @media (max-width: 760px) {
+            .rdp-card-list {
+                grid-template-columns: 1fr;
+            }
+            .edit-field.span-6 {
+                grid-column: span 12;
+            }
+            .edit-field.span-4,
+            .edit-field.span-8 {
+                grid-column: span 12;
+            }
+        }
     </style>
 </head>
-<body>
+<body data-title-key="app.rdpTitle">
     <header class="top-header">
         <div class="logo-area">
-            <h1>EnvPortal <span>| RDP管理</span></h1>
-            <p>リモートデスクトップ(RDP)の接続情報を管理します</p>
+            <h1>Env<span>Portal</span></h1>
+            <p data-i18n="header.rdpDesc">Windows / Linux などのサーバ遠隔接続情報を管理します</p>
         </div>
         <nav class="main-nav">
             <div class="main-nav-inner">
-                <a href="index.html">環境検索</a>
-                <a href="admin.html">データ管理</a>
-                <a href="rdp.html" class="active">RDP情報管理</a>
+                <a href="index.html" data-i18n="nav.search">環境検索</a>
+                <a href="admin.html" data-i18n="nav.admin">データ管理</a>
+                <a href="rdp.html" class="active" data-i18n="nav.rdp">サーバ接続情報管理</a>
             </div>
         </nav>
     </header>
@@ -127,35 +236,39 @@
         
         <div class="actions-bar">
             <div>
-                <select id="orgFilter" style="width: 250px; padding: 0.6rem; color: var(--primary); font-weight: bold;" onchange="currentOrgPage = 1; renderEditor()">
-                    <option value="">▼ 全ての組織を表示</option>
-                </select>
+                <div class="rdp-toolbar-left">
+                    <select id="orgFilter" style="width: 280px; color: var(--primary); font-weight: 600;" onchange="currentOrgPage = 1; renderEditor()">
+                        <option value="" data-i18n="select.allOrgs">▼ 全ての組織を表示</option>
+                    </select>
+                    <span id="rdpStat" class="rdp-stat" data-i18n="state.loading">読み込み中...</span>
+                </div>
             </div>
             <div style="flex-grow: 1;"></div>
-            <button id="btnAdd" type="button" class="secondary-btn" onclick="addNewRow()">＋ 新規行を追加</button>
-            <button id="btnSave" type="button" class="primary-btn" onclick="saveToServer()">保存する (一括更新)</button>
+            <div id="toolbarPagination" class="toolbar-pagination"></div>
+            <button id="btnAdd" type="button" class="secondary-btn" onclick="addNewRow()" data-i18n="button.addRow">＋ 新規行を追加</button>
+            <button id="btnSave" type="button" class="primary-btn" onclick="saveToServer()" data-i18n="button.saveAll">保存する (一括更新)</button>
         </div>
 
         <div id="editorArea">
-            <div style="text-align:center; color:var(--text-muted); padding: 4rem; border: 1px solid var(--border); background: var(--card); font-weight: bold;">データを読み込んでいます...</div>
+            <div style="text-align:center; color:var(--text-muted); padding: 4rem; border: 1px solid var(--border); background: var(--card); font-weight: bold;" data-i18n="state.loading">データを読み込んでいます...</div>
         </div>
     </div>
 
     <!-- パスワード モーダル -->
     <div id="pwdModal" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center;">
         <div style="background:#fff; padding:2rem; border-radius:3px; width:320px; text-align:center; box-shadow:0 4px 15px rgba(0,0,0,0.2); border-top: 5px solid var(--primary);">
-            <h3 style="margin-bottom:0.5rem; font-size:1.2rem; color:var(--text-main);">ロック解除</h3>
-            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.5rem;">編集用のパスワードを入力してください</p>
+            <h3 style="margin-bottom:0.5rem; font-size:1.2rem; color:var(--text-main);" data-i18n="modal.unlockTitle">ロック解除</h3>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.5rem;" data-i18n="modal.unlockDesc">編集用のパスワードを入力してください</p>
             <input type="password" id="modalPwdInput" style="margin-bottom:1.5rem; text-align:center; font-size:1.2rem; letter-spacing:5px; padding: 0.8rem;" onkeypress="if(event.key==='Enter') submitPwdModal()">
             <div style="display:flex; justify-content:space-between; gap:1rem;">
-                <button type="button" class="secondary-btn" style="flex:1;" onclick="closePwdModal()">キャンセル</button>
-                <button type="button" class="primary-btn" style="flex:1;" onclick="submitPwdModal()">確認</button>
+                <button type="button" class="secondary-btn" style="flex:1;" onclick="closePwdModal()" data-i18n="button.cancel">キャンセル</button>
+                <button type="button" class="primary-btn" style="flex:1;" onclick="submitPwdModal()" data-i18n="button.confirm">確認</button>
             </div>
         </div>
     </div>
 
     <!-- 弹窗提示 -->
-    <div id="toast">保存成功。</div>
+    <div id="toast" data-i18n="toast.saved">保存成功。</div>
 
     <script>
         let currentData = [];
@@ -171,6 +284,11 @@
             } else {
                 document.getElementById('modalPwdInput').focus();
             }
+        });
+
+        window.addEventListener('i18n:changed', () => {
+            initFilter();
+            renderEditor();
         });
 
         function loadAdminData() {
@@ -192,7 +310,7 @@
                 })
                 .catch(error => {
                     console.error('rdp.csv の読み込みに失敗しました:', error);
-                    document.getElementById('editorArea').innerHTML = '<div style="text-align:center; color:red; padding: 2rem;">データの読み込みに失敗しました。</div>';
+                    document.getElementById('editorArea').innerHTML = `<div style="text-align:center; color:red; padding: 2rem;">${t('select.loadFailed')}</div>`;
                 });
         }
 
@@ -201,21 +319,22 @@
             editorArea.innerHTML = '';
 
             if(currentData.length === 0) {
-                editorArea.innerHTML = '<div class="card" style="text-align:center; padding:4rem; color:var(--text-muted); font-weight: bold;">データがありません。「新規行を追加」をクリックして開始してください。</div>';
+                editorArea.innerHTML = `<div class="card" style="text-align:center; padding:4rem; color:var(--text-muted); font-weight: bold;">${t('state.noAdminData')}</div>`;
+                renderRdpSummary(0, 0, 1, 1);
                 return;
             }
 
             const orgMap = new Map();
             currentData.forEach((row, idx) => {
                 const org = (row['組織名'] || '').trim();
-                let key = org === '' ? '（未設定の組織・新規）' : org;
+                let key = org === '' ? t('unset.org') : org;
                 if (!orgMap.has(key)) orgMap.set(key, []);
                 orgMap.get(key).push({ ...row, originalIndex: idx });
             });
 
             const sortedOrgs = Array.from(orgMap.keys()).sort((a,b) => {
-                if(a === '（未設定の組織・新規）') return -1;
-                if(b === '（未設定の組織・新規）') return 1;
+                if(a === t('unset.org')) return -1;
+                if(b === t('unset.org')) return 1;
                 return a.localeCompare(b);
             });
 
@@ -223,12 +342,19 @@
             let filteredOrgs = sortedOrgs;
 
             if (filterVal !== '') {
-                filteredOrgs = sortedOrgs.filter(org => org === filterVal || org === '（未設定の組織・新規）');
+                filteredOrgs = sortedOrgs.filter(org => org === filterVal || org === t('unset.org'));
+            }
+
+            if (filteredOrgs.length === 0) {
+                renderRdpSummary(0, currentData.length, 1, 1);
+                editorArea.innerHTML = `<div class="card" style="text-align:center; padding:4rem; color:var(--text-muted); font-weight: 600;">${t('state.noMatchedOrg')}</div>`;
+                return;
             }
 
             const totalPages = Math.ceil(filteredOrgs.length / ORGS_PER_PAGE);
             if (currentOrgPage > totalPages) currentOrgPage = Math.max(1, totalPages);
             if (currentOrgPage < 1) currentOrgPage = 1;
+            renderRdpSummary(filteredOrgs.length, currentData.length, currentOrgPage, Math.max(1, totalPages));
 
             const startIndex = (currentOrgPage - 1) * ORGS_PER_PAGE;
             const endIndex = Math.min(startIndex + ORGS_PER_PAGE, filteredOrgs.length);
@@ -236,70 +362,85 @@
 
             orgsToShow.forEach(org => {
                 const orgBlock = document.createElement('div');
-                orgBlock.className = 'card';
-                orgBlock.style.padding = '1.5rem';
+                orgBlock.className = 'card org-card';
 
-                const orgHeader = document.createElement('h2');
-                orgHeader.className = 'org-header-title';
-                orgHeader.textContent = org;
+                const orgHeader = document.createElement('div');
+                orgHeader.className = 'org-block-header';
+                orgHeader.innerHTML = `<h2 class="org-header-title">${escapeHtml(org)}</h2>`;
                 orgBlock.appendChild(orgHeader);
 
+                const list = document.createElement('div');
+                list.className = 'rdp-card-list';
                 const rows = orgMap.get(org);
                 rows.forEach(item => {
                     const idx = item.originalIndex;
                     const itemEditor = document.createElement('div');
-                    itemEditor.className = 'editor-grid';
+                    itemEditor.className = 'rdp-editor-card';
                     itemEditor.innerHTML = `
-                        <div>
-                            <label>組織名</label>
-                            <input type="text" value="${escapeHtml(item['組織名'])}" onchange="updateData(${idx}, '組織名', this.value)">
+                        <div class="rdp-editor-card-header">
+                            <div class="rdp-editor-card-title">${escapeHtml(item['接続先(IP:Port)']) || t('unset.value')}</div>
                         </div>
-                        <div>
-                            <label>RDPユーザー名</label>
-                            <input type="text" value="${escapeHtml(item['RDPユーザー名'])}" onchange="updateData(${idx}, 'RDPユーザー名', this.value)">
+                        <div class="rdp-editor-body">
+                            <div class="edit-field span-12">
+                                <label>${t('label.orgName')}</label>
+                                <input type="text" value="${escapeHtml(item['組織名'])}" onchange="updateData(${idx}, '組織名', this.value)">
+                            </div>
+                            <div class="edit-field span-8">
+                                <label>${t('label.connection')}(IP:Port)</label>
+                                <input type="text" value="${escapeHtml(item['接続先(IP:Port)'])}" onchange="updateData(${idx}, '接続先(IP:Port)', this.value); updateRemoteTypeFromTarget(${idx}); renderEditor()">
+                            </div>
+                            <div class="edit-field span-4">
+                                <label>${t('label.remoteType')}</label>
+                                ${renderRemoteTypeSelect(idx, getRemoteType(item))}
+                            </div>
+                            <div class="edit-field span-6">
+                                <label>${t('label.remoteUser')}</label>
+                                <input type="text" value="${escapeHtml(item['RDPユーザー名'])}" onchange="updateData(${idx}, 'RDPユーザー名', this.value)">
+                            </div>
+                            <div class="edit-field span-6">
+                                <label>${t('label.remotePassword')}</label>
+                                <input type="text" value="${escapeHtml(item['RDPパスワード'])}" onchange="updateData(${idx}, 'RDPパスワード', this.value)">
+                            </div>
                         </div>
-                        <div>
-                            <label>RDPパスワード</label>
-                            <input type="text" value="${escapeHtml(item['RDPパスワード'])}" onchange="updateData(${idx}, 'RDPパスワード', this.value)">
-                        </div>
-                        <div>
-                            <label>接続先(IP:Port)</label>
-                            <input type="text" value="${escapeHtml(item['接続先(IP:Port)'])}" onchange="updateData(${idx}, '接続先(IP:Port)', this.value)">
-                        </div>
-                        <div>
-                            <button type="button" class="del-btn" onclick="deleteRow(${idx})" title="削除">削除</button>
+                        <div class="rdp-editor-card-footer">
+                            <button type="button" class="del-btn" onclick="deleteRow(${idx})" title="${t('button.deleteRdp')}">${t('button.deleteRdp')}</button>
                         </div>
                     `;
-                    orgBlock.appendChild(itemEditor);
+                    list.appendChild(itemEditor);
                 });
 
+                orgBlock.appendChild(list);
                 editorArea.appendChild(orgBlock);
             });
 
-            // 分页
-            if (totalPages > 1) {
-                const paginationDiv = document.createElement('div');
-                paginationDiv.className = 'pagination';
-                
-                const prevBtn = document.createElement('button');
-                prevBtn.textContent = '≪ 前へ';
-                prevBtn.onclick = () => changePage(-1);
-                if (currentOrgPage === 1) prevBtn.disabled = true;
+        }
 
-                const pageSpan = document.createElement('span');
-                pageSpan.textContent = `ページ ${currentOrgPage} / ${totalPages}`;
+        function renderRdpSummary(orgCount, rowCount, page, totalPages) {
+            const stat = document.getElementById('rdpStat');
+            if (stat) stat.innerHTML = t('rdp.stat', { org: orgCount, rdp: rowCount });
 
-                const nextBtn = document.createElement('button');
-                nextBtn.textContent = '次へ ≫';
-                nextBtn.onclick = () => changePage(1);
-                if (currentOrgPage === totalPages) nextBtn.disabled = true;
+            const pager = document.getElementById('toolbarPagination');
+            if (!pager) return;
+            pager.innerHTML = '';
 
-                paginationDiv.appendChild(prevBtn);
-                paginationDiv.appendChild(pageSpan);
-                paginationDiv.appendChild(nextBtn);
-                
-                editorArea.appendChild(paginationDiv);
-            }
+            const prevBtn = document.createElement('button');
+            prevBtn.type = 'button';
+            prevBtn.textContent = '‹';
+            prevBtn.onclick = () => changePage(-1);
+            prevBtn.disabled = page <= 1;
+
+            const pageSpan = document.createElement('span');
+            pageSpan.textContent = `${page} / ${totalPages}`;
+
+            const nextBtn = document.createElement('button');
+            nextBtn.type = 'button';
+            nextBtn.textContent = '›';
+            nextBtn.onclick = () => changePage(1);
+            nextBtn.disabled = page >= totalPages;
+
+            pager.appendChild(prevBtn);
+            pager.appendChild(pageSpan);
+            pager.appendChild(nextBtn);
         }
 
         function changePage(direction) {
@@ -315,8 +456,38 @@
             }
         }
 
+        function renderRemoteTypeSelect(index, selectedType) {
+            const types = ['', 'RDP', 'SSH'];
+            return `<select onchange="updateData(${index}, '接続タイプ', this.value)">${types.map(type => {
+                const selected = type === selectedType ? ' selected' : '';
+                return `<option value="${escapeHtml(type)}"${selected}>${escapeHtml(type)}</option>`;
+            }).join('')}</select>`;
+        }
+
+        function getRemoteType(row) {
+            const explicitType = String(row['接続タイプ'] || row['接続種別'] || row['タイプ'] || '').trim();
+            if (explicitType) return explicitType.toUpperCase();
+            return inferRemoteType(row['接続先(IP:Port)']);
+        }
+
+        function inferRemoteType(target) {
+            const match = String(target || '').match(/:(\d+)\s*$/);
+            if (!match) return '';
+            if (match[1] === '22') return 'SSH';
+            if (match[1] === '3389') return 'RDP';
+            return '';
+        }
+
+        function updateRemoteTypeFromTarget(index) {
+            const row = currentData[index];
+            if (!row) return;
+            if ((row['接続タイプ'] || '').trim()) return;
+            const inferred = inferRemoteType(row['接続先(IP:Port)']);
+            if (inferred) row['接続タイプ'] = inferred;
+        }
+
         function deleteRow(index) {
-            if(confirm("このデータを完全に削除してもよろしいですか？（※即座にサーバーから削除されます）")) {
+            if(confirm(t('confirm.delete'))) {
                 currentData.splice(index, 1);
                 saveToServer();
             }
@@ -326,6 +497,7 @@
             const filterVal = document.getElementById('orgFilter').value;
             currentData.unshift({
                 '組織名': filterVal || '',
+                '接続タイプ': '',
                 'RDPユーザー名': '',
                 'RDPパスワード': '',
                 '接続先(IP:Port)': ''
@@ -349,7 +521,7 @@
                 if(val !== '') orgSet.add(val);
             });
             
-            orgSelect.innerHTML = '<option value="">▼ 全ての組織を表示</option>';
+            orgSelect.innerHTML = `<option value="">${t('select.allOrgs')}</option>`;
             Array.from(orgSet).sort().forEach(org => {
                 const opt = document.createElement('option');
                 opt.value = org;
@@ -367,10 +539,13 @@
                 return (row['組織名'] || '').trim() !== '';
             });
             
-            const fields = ["組織名", "RDPユーザー名", "RDPパスワード", "接続先(IP:Port)"];
+            const fields = ["組織名", "接続タイプ", "RDPユーザー名", "RDPパスワード", "接続先(IP:Port)"];
             const csv = Papa.unparse({
                 fields: fields,
-                data: filteredData
+                data: filteredData.map(row => ({
+                    ...row,
+                    '接続タイプ': getRemoteType(row)
+                }))
             }, { quotes: true });
             
             fetch('update_rdp.jsp', {
@@ -385,14 +560,14 @@
                     currentData = filteredData;
                     initFilter();
                     renderEditor();
-                    showToast('保存成功。サーバーのデータが更新されました。');
+                    showToast(t('toast.savedDetail'));
                 } else {
-                    res.text().then(text => alert('サーバーエラー: ' + text));
+                    res.text().then(text => alert('Server error: ' + text));
                 }
             })
             .catch(err => {
                 console.error(err);
-                alert('ネットワークエラー。Tomcatサーバー上で実行されているか確認してください。');
+                alert(t('error.network'));
             });
         }
 
@@ -428,16 +603,16 @@
                     document.getElementById('pwdModal').style.display = 'none';
                     document.getElementById('adminContainer').style.display = 'block';
                     loadAdminData();
-                    showToast("認証成功！データ管理を開始します。");
+                    showToast(t('toast.authOk'));
                 } else {
-                    alert("パスワードが正しくありません。");
+                    alert(t('error.authWrong'));
                     document.getElementById('modalPwdInput').value = '';
                     document.getElementById('modalPwdInput').focus();
                 }
             })
             .catch(err => {
                 console.error(err);
-                alert("認証でエラーが発生しました。サーバーと通信できません。");
+                alert(t('error.auth'));
             });
         }
 

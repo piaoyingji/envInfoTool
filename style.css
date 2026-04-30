@@ -1,17 +1,18 @@
 :root {
-    --bg: #f2f7fa;
-    --text-main: #333333;
-    --text-muted: #666666;
-    --border: #c9ddec;
+    --bg: #f2f8fb;
+    --text-main: #172435;
+    --text-muted: #6b7f8f;
+    --border: #d7e6ee;
     --card: #ffffff;
-    --primary: #1ca1e3; /* Skyblue Theme Color */
-    --primary-hover: #137fac;
-    --bg-subtle: #eef7fc; 
-    --ring: rgba(28, 161, 227, 0.2);
+    --primary: #087ea4;
+    --primary-hover: #0ea5c6;
+    --bg-subtle: #edf8fb; 
+    --ring: rgba(8, 126, 164, 0.16);
+    --shadow-card: 0 1px 2px rgba(13,55,74,0.04), 0 10px 28px rgba(13,55,74,0.08);
 }
 
 body {
-    font-family: 'Meiryo UI', Meiryo, 'Hiragino Kaku Gothic ProN', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Meiryo UI", Meiryo, "Hiragino Kaku Gothic ProN", sans-serif;
     background-color: var(--bg);
     color: var(--text-main);
     margin: 0;
@@ -29,21 +30,47 @@ h1, h2, h3 {
 
 .top-header {
     width: 100%;
-    background-color: #ffffff;
-    margin-bottom: 2.5rem;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(248,251,255,0.9) 100%);
+    margin-bottom: 24px;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.03), 0 10px 30px rgba(15,23,42,0.08);
+}
+
+.top-header::before {
+    content: "";
+    position: absolute;
+    inset: -26px -8px 22px;
+    background: url("images/sea01.jpg") center 82% / cover no-repeat;
+    filter: blur(7px) saturate(1.08) contrast(0.92) brightness(1.08);
+    opacity: 0.72;
+    transform: scale(1.025);
+    pointer-events: none;
+}
+
+.top-header::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.68) 44%, rgba(230,246,255,0.4) 100%),
+        linear-gradient(180deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.04) 100%);
+    pointer-events: none;
 }
 
 .logo-area {
     max-width: 1200px;
     margin: 0 auto;
     padding: 1.5rem 1rem 1rem 1rem;
+    position: relative;
+    z-index: 2;
 }
 
 .logo-area h1 {
-    font-size: 1.8rem;
+    font-size: 1.7rem;
     color: var(--text-main);
     margin-bottom: 0.2rem;
+    font-weight: 600;
 }
 
 .logo-area h1 span {
@@ -58,7 +85,12 @@ h1, h2, h3 {
 
 .main-nav {
     width: 100%;
-    background-color: var(--primary);
+    position: relative;
+    z-index: 2;
+    background: linear-gradient(90deg, rgba(17,70,97,0.72) 0%, rgba(10,111,145,0.64) 52%, rgba(14,150,170,0.56) 100%);
+    border-top: 1px solid rgba(255,255,255,0.5);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 12px 28px rgba(15,23,42,0.12);
+    backdrop-filter: blur(14px) saturate(1.1);
 }
 
 .main-nav-inner {
@@ -69,22 +101,45 @@ h1, h2, h3 {
 }
 
 .main-nav a {
-    color: #ffffff;
+    color: rgba(255,255,255,0.86);
     text-decoration: none;
-    padding: 0.8rem 2.5rem;
+    padding: 0.85rem 2.2rem;
     font-size: 0.95rem;
-    font-weight: bold;
+    font-weight: 500;
     background-color: transparent;
-    transition: background-color 0.2s;
-    border-right: 1px solid rgba(255,255,255,0.2);
-}
-
-.main-nav a:first-child {
-    border-left: 1px solid rgba(255,255,255,0.2);
+    transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+    border-right: 1px solid rgba(255,255,255,0.12);
 }
 
 .main-nav a:hover, .main-nav a.active {
-    background-color: var(--primary-hover);
+    color: #ffffff;
+    background: linear-gradient(180deg, rgba(20,184,166,0.9) 0%, rgba(8,126,164,0.86) 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 8px 20px rgba(8,126,164,0.18);
+}
+
+.language-switch {
+    position: absolute;
+    right: 1rem;
+    top: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.language-switch select {
+    width: auto;
+    min-height: 34px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text-main);
+    padding: 0.25rem 0.7rem;
+}
+
+.language-switch select option {
+    color: var(--text-main);
+    background: #fff;
 }
 
 .container {
@@ -92,12 +147,12 @@ h1, h2, h3 {
 }
 
 .card {
-    background-color: var(--card);
+    background: linear-gradient(180deg, #ffffff 0%, #f6fcfd 100%);
     border: 1px solid var(--border);
-    border-radius: 2px;
+    border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    box-shadow: var(--shadow-card);
 }
 
 .form-group {
@@ -114,10 +169,11 @@ h1, h2, h3 {
 
 input, select {
     width: 100%;
-    padding: 0.6rem;
+    min-height: 38px;
+    padding: 0.45rem 0.75rem;
     background-color: #ffffff;
-    border: 1px solid #bbbbbb;
-    border-radius: 2px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
     color: var(--text-main);
     font-family: inherit;
     font-size: 0.9rem;
@@ -128,7 +184,7 @@ input, select {
 input:focus, select:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 5px var(--ring);
+    box-shadow: 0 0 0 2px var(--ring);
 }
 
 input:disabled, select:disabled {
@@ -142,26 +198,29 @@ button.primary-btn {
     background-color: var(--primary);
     color: white;
     border: none;
-    padding: 0.6rem 1.5rem;
-    border-radius: 2px;
-    font-size: 0.95rem;
-    font-weight: bold;
+    min-height: 38px;
+    padding: 0.45rem 1.15rem;
+    border-radius: 6px;
+    font-size: 0.92rem;
+    font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 button.primary-btn:hover {
     background-color: var(--primary-hover);
+    box-shadow: 0 2px 8px rgba(8,126,164,0.24);
 }
 
 button.secondary-btn {
     background-color: #ffffff;
     color: var(--text-main);
     border: 1px solid var(--border);
-    padding: 0.6rem 1.5rem;
-    border-radius: 2px;
-    font-size: 0.95rem;
-    font-weight: bold;
+    min-height: 38px;
+    padding: 0.45rem 1.15rem;
+    border-radius: 6px;
+    font-size: 0.92rem;
+    font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
 }
@@ -179,19 +238,24 @@ button.secondary-btn:hover {
 }
 
 .env-card {
-    background-color: var(--card);
-    border: 1px solid var(--border);
-    border-top: 3px solid var(--primary); /* subtle top line */
-    border-radius: 2px;
+    background: linear-gradient(180deg, #eaf8fb 0%, #f7fcfd 34%, #ffffff 100%);
+    border: 1px solid #b8e2ea;
+    border-radius: 8px;
     padding: 1.25rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), var(--shadow-card);
+    transition: all 0.2s;
+}
+
+.env-card:hover {
+    border-color: #67c7d8;
+    box-shadow: 0 3px 6px rgba(13,55,74,0.05), 0 10px 26px rgba(13,55,74,0.1);
 }
 
 .env-card h3 {
     font-size: 1.15rem;
     margin-bottom: 1.25rem;
     color: var(--text-main);
-    border-bottom: 2px solid var(--border);
+    border-bottom: 1px solid #f0f0f0;
     padding-bottom: 0.75rem;
     line-height: 1.3;
 }
@@ -204,7 +268,7 @@ button.secondary-btn:hover {
     display: flex;
     margin-bottom: 0.5rem;
     align-items: center;
-    border-bottom: 1px dashed var(--border);
+    border-bottom: 1px solid #f0f0f0;
     padding-bottom: 0.5rem;
 }
 
@@ -235,9 +299,9 @@ button.secondary-btn:hover {
 
 .copy-btn {
     background-color: #ffffff;
-    border: 1px solid #cccccc;
+    border: 1px solid var(--border);
     color: var(--text-main);
-    border-radius: 2px;
+    border-radius: 6px;
     padding: 0.25rem 0.5rem;
     font-size: 0.75rem;
     margin-left: 0.5rem;
@@ -256,6 +320,7 @@ button.secondary-btn:hover {
     font-size: 0.95rem;
     background-color: var(--card);
     border: 1px solid var(--border);
+    border-radius: 8px;
 }
 
 #toast {
@@ -265,7 +330,7 @@ button.secondary-btn:hover {
     background-color: var(--primary);
     color: white;
     padding: 0.8rem 1.5rem;
-    border-radius: 2px;
+    border-radius: 6px;
     transform: translateY(100px);
     opacity: 0;
     transition: all 0.3s ease;
@@ -289,7 +354,7 @@ button.secondary-btn:hover {
     font-size: 0.7rem;
     font-weight: bold;
     padding: 0.1rem 0.4rem;
-    border-radius: 2px;
+    border-radius: 4px;
     margin-left: 0.5rem;
     cursor: pointer;
     vertical-align: middle;
@@ -314,11 +379,11 @@ button.secondary-btn:hover {
 .modal-content {
     background: #fff;
     padding: 2rem;
-    border-radius: 3px;
+    border-radius: 8px;
     width: 320px;
     text-align: center;
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    border-top: 5px solid var(--primary);
+    border-top: 4px solid var(--primary);
 }
 .modal-content h3 {
     margin-bottom: 0.5rem;
