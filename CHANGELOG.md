@@ -2,6 +2,14 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.7] - 2026-05-01
+
+### Fixed
+
+- Improved Docker Desktop detection after a fresh install by checking standard install locations even when PATH has not been refreshed.
+- Added automatic Docker Desktop startup and Docker engine readiness waiting before Guacamole deployment.
+- Added clearer startup output when Docker CLI exists but the Docker engine is not ready.
+
 ## [2.1.6] - 2026-05-01
 
 ### Added

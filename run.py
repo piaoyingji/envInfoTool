@@ -12,15 +12,35 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 
 
-def docker_desktop_candidates():
-    candidates = []
-    program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
-    docker_path = Path(program_files) / "Docker" / "Docker" / "resources" / "bin" / "docker.exe"
-    compose_path = Path(program_files) / "Docker" / "Docker" / "resources" / "bin" / "docker-compose.exe"
-    if docker_path.exists():
-        candidates.append([str(docker_path), "compose"])
-    if compose_path.exists():
-        candidates.append([str(compose_path)])
+def docker_desktop_base_dirs():
+    values = []
+    for env_name in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)", "LocalAppData"):
+        root = os.environ.get(env_name)
+        if not root:
+            continue
+        path = Path(root) / "Docker" / "Docker"
+        if path not in values:
+            values.append(path)
+    return values
+
+
+def docker_desktop_executable():
+    for base_dir in docker_desktop_base_dirs():
+        exe = base_dir / "Docker Desktop.exe"
+        if exe.exists():
+            return exe
+    return None
+
+
+def docker_cli_candidates():
+    candidates = [["docker"], ["docker-compose"]]
+    for base_dir in docker_desktop_base_dirs():
+        docker_path = base_dir / "resources" / "bin" / "docker.exe"
+        compose_path = base_dir / "resources" / "bin" / "docker-compose.exe"
+        if docker_path.exists():
+            candidates.append([str(docker_path)])
+        if compose_path.exists():
+            candidates.append([str(compose_path)])
     return candidates
 
 
@@ -32,15 +52,12 @@ def wsl_path(path):
 
 
 def docker_command():
-    checks = [
-        (["docker", "compose"], ["docker", "compose", "version"], "windows"),
-        (["docker-compose"], ["docker-compose", "--version"], "windows"),
-    ]
-    for candidate in docker_desktop_candidates():
-        if len(candidate) == 2:
-            checks.append((candidate, candidate + ["version"], "windows"))
-        else:
+    checks = []
+    for candidate in docker_cli_candidates():
+        if Path(candidate[0]).name.lower().startswith("docker-compose"):
             checks.append((candidate, candidate + ["--version"], "windows"))
+        else:
+            checks.append((candidate + ["compose"], candidate + ["compose", "version"], "windows"))
 
     for command, check, kind in checks:
         try:
@@ -56,6 +73,64 @@ def docker_command():
     except Exception:
         pass
     return None
+
+
+def docker_engine_ready(command):
+    if not command:
+        return False
+    try:
+        if command["kind"] == "wsl":
+            result = subprocess.run(
+                ["wsl.exe", "-e", "sh", "-lc", "docker info >/dev/null 2>&1"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=8,
+            )
+        elif Path(command["command"][0]).name.lower().startswith("docker-compose"):
+            result = subprocess.run(
+                ["docker", "info"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=8,
+            )
+        else:
+            result = subprocess.run(
+                [command["command"][0], "info"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=8,
+            )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def start_docker_desktop_if_available():
+    if os.name != "nt":
+        return False
+    exe = docker_desktop_executable()
+    if not exe:
+        return False
+    try:
+        print(f"Starting Docker Desktop: {exe}")
+        subprocess.Popen([str(exe)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+        return True
+    except Exception as exc:
+        print(f"Docker Desktop could not be started: {exc}")
+        return False
+
+
+def wait_for_docker_command(timeout_seconds=120):
+    deadline = time.time() + timeout_seconds
+    last_command = None
+    while time.time() < deadline:
+        command = docker_command()
+        if command:
+            last_command = command
+            if docker_engine_ready(command):
+                return command
+        time.sleep(3)
+    return last_command
 
 
 def command_available(command):
@@ -321,8 +396,19 @@ def start_guacamole_if_available():
         return
     command = docker_command()
     if not command:
-        print("Docker was not found in PATH, Docker Desktop, or WSL. Guacamole integration is disabled.")
-        offer_docker_desktop_install()
+        if start_docker_desktop_if_available():
+            print("Waiting for Docker Desktop to expose the Docker CLI...")
+            command = wait_for_docker_command(env_int("DOCKER_WAIT_SECONDS", 120))
+        if not command:
+            print("Docker was not found in PATH, Docker Desktop, or WSL. Guacamole integration is disabled.")
+            offer_docker_desktop_install()
+            return
+    if not docker_engine_ready(command):
+        if start_docker_desktop_if_available():
+            print("Waiting for Docker Desktop engine...")
+            command = wait_for_docker_command(env_int("DOCKER_WAIT_SECONDS", 120)) or command
+    if not docker_engine_ready(command):
+        print("Docker CLI was found, but the Docker engine is not ready. Start Docker Desktop and run start.bat again.")
         return
     try:
         if command["kind"] == "wsl":
