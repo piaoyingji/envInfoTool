@@ -2,6 +2,12 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.24] - 2026-05-01
+
+### Changed
+
+- Removed the automatic browser launch after the Python server starts; startup now only prints console URLs and status.
+
 ## [2.1.23] - 2026-05-01
 
 ### Fixed

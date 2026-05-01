@@ -1114,11 +1114,6 @@ def main():
     print(" Press Ctrl+C to stop.")
     print("=================================================")
     try:
-        if sys.platform.startswith("win"):
-            os.startfile(f"http://localhost:{PORT}/index.html")
-    except Exception:
-        pass
-    try:
         server.serve_forever(poll_interval=0.2)
     finally:
         server.server_close()
