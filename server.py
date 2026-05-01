@@ -162,6 +162,7 @@ def public_guacamole_url(request_host=""):
 def guacamole_quickconnect(target, user="", password="", public_url=""):
     quickconnect_uri = build_guacamole_uri(target, user, password)
     display_url = public_url or GUACAMOLE_URL
+    auto_login_url = "/guacamole_auto_login.jsp" if GUACAMOLE_USERNAME and GUACAMOLE_PASSWORD else display_url
     status = guacamole_status(ttl_seconds=0)
     if not GUACAMOLE_URL:
         return {
@@ -183,7 +184,7 @@ def guacamole_quickconnect(target, user="", password="", public_url=""):
     fallback = {
         "ok": True,
         "mode": "manual",
-        "guacamoleUrl": display_url,
+        "guacamoleUrl": auto_login_url,
         "quickconnectUri": quickconnect_uri,
         "message": "Open Guacamole and paste the QuickConnect URI.",
     }
@@ -882,11 +883,14 @@ class EnvPortalHandler(SimpleHTTPRequestHandler):
             if not public_url:
                 self.send_bytes(b"Guacamole is not configured.", status=404)
                 return
-            token, token_error = guacamole_token()
-            if not token:
-                self.send_bytes(("Guacamole auto-login failed: " + token_error).encode("utf-8"), status=503)
+            if not GUACAMOLE_USERNAME or not GUACAMOLE_PASSWORD:
+                self.send_redirect(public_url)
                 return
-            redirect_url = public_url + "/#/?token=" + urllib.parse.quote(token)
+            query = urllib.parse.urlencode({
+                "username": GUACAMOLE_USERNAME,
+                "password": GUACAMOLE_PASSWORD,
+            })
+            redirect_url = public_url + "/#/" + "?" + query
             self.send_redirect(redirect_url)
             return
 

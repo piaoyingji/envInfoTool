@@ -2,6 +2,13 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.11] - 2026-05-01
+
+### Fixed
+
+- Changed Guacamole auto-login to use Guacamole's frontend-supported username/password route parameters instead of a pre-issued token URL.
+- Changed Guacamole QuickConnect fallback URLs to use the EnvPortal auto-login endpoint instead of opening the raw Guacamole login page.
+
 ## [2.1.10] - 2026-05-01
 
 ### Added
