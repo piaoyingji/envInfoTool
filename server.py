@@ -724,22 +724,28 @@ class EnvPortalHandler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(BASE_DIR), **kwargs)
 
     def send_bytes(self, payload, content_type="text/plain; charset=utf-8", status=200):
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            pass
 
     def send_download(self, payload, filename, content_type="application/x-rdp"):
         quoted = urllib.parse.quote(filename)
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quoted}")
-        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quoted}")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            pass
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length", "0"))

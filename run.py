@@ -58,6 +58,60 @@ def docker_command():
     return None
 
 
+def command_available(command):
+    try:
+        subprocess.run([command, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        return True
+    except Exception:
+        return False
+
+
+def prompt_yes_no(message, default=False):
+    if not sys.stdin or not sys.stdin.isatty():
+        return default
+    suffix = " [Y/n]: " if default else " [y/N]: "
+    try:
+        answer = input(message + suffix).strip().lower()
+    except Exception:
+        return default
+    if not answer:
+        return default
+    return answer in ("y", "yes", "1")
+
+
+def offer_docker_desktop_install():
+    if os.name != "nt":
+        return False
+    if load_env_value("DOCKER_INSTALL_PROMPT", "true").lower() not in ("1", "true", "yes", "on"):
+        return False
+    if not command_available("winget"):
+        print("Install Docker Desktop from https://www.docker.com/products/docker-desktop/ and run start.bat again.")
+        return False
+    if not prompt_yes_no("Docker Desktop is required for Guacamole. Install Docker Desktop now?", False):
+        print("Guacamole integration is disabled until Docker Desktop is installed.")
+        return False
+    try:
+        print("Installing Docker Desktop via winget...")
+        subprocess.run(
+            [
+                "winget",
+                "install",
+                "-e",
+                "--id",
+                "Docker.DockerDesktop",
+                "--accept-package-agreements",
+                "--accept-source-agreements",
+            ],
+            cwd=BASE_DIR,
+            check=True,
+        )
+        print("Docker Desktop installation completed. Start Docker Desktop once, then run start.bat again.")
+        return True
+    except Exception as exc:
+        print(f"Docker Desktop installation failed: {exc}")
+        return False
+
+
 def load_env_value(name, default=""):
     env_path = BASE_DIR / ".env"
     if not env_path.exists():
@@ -268,6 +322,7 @@ def start_guacamole_if_available():
     command = docker_command()
     if not command:
         print("Docker was not found in PATH, Docker Desktop, or WSL. Guacamole integration is disabled.")
+        offer_docker_desktop_install()
         return
     try:
         if command["kind"] == "wsl":

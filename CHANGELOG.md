@@ -2,6 +2,16 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.6] - 2026-05-01
+
+### Added
+
+- Added an optional Docker Desktop install prompt through `winget` when Guacamole is enabled but Docker is unavailable on Windows.
+
+### Fixed
+
+- Suppressed noisy traceback output when a browser aborts a request before EnvPortal finishes writing the response.
+
 ## [2.1.5] - 2026-05-01
 
 ### Fixed
