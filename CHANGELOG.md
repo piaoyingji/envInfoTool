@@ -2,6 +2,12 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.25] - 2026-05-01
+
+### Fixed
+
+- Fixed home page summary/detail card sizing so expanded cards use the same grid width as summary cards and wrap long content instead of overflowing.
+
 ## [2.1.24] - 2026-05-01
 
 ### Changed

@@ -47,7 +47,7 @@
         }
         .org-badges-wrapper {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(min(100%, 700px), 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr));
             gap: 0.9rem;
             align-items: start;
         }
@@ -405,6 +405,7 @@
             border-radius: 6px;
             border: 1px solid #b8e2ea;
             margin-top: 1rem;
+            min-width: 0;
         }
         .db-section-title {
             color: var(--primary);
@@ -419,6 +420,7 @@
         .icon-btn {
             width: 34px;
             height: 30px;
+            flex: 0 0 34px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
