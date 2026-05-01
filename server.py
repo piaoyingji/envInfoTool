@@ -43,6 +43,7 @@ GUACAMOLE_URL = CONFIG.get("GUACAMOLE_URL", "").rstrip("/")
 GUACAMOLE_PUBLIC_URL = CONFIG.get("GUACAMOLE_PUBLIC_URL", "").rstrip("/")
 GUACAMOLE_USERNAME = CONFIG.get("GUACAMOLE_USERNAME", "")
 GUACAMOLE_PASSWORD = CONFIG.get("GUACAMOLE_PASSWORD", "")
+GUACAMOLE_STATUS_CACHE = {"checked_at": 0, "available": False, "message": "not checked"}
 
 
 def json_bytes(payload):
@@ -68,6 +69,32 @@ def http_post_form(url, data, timeout=8):
         if "application/json" in content_type or body.strip().startswith(("{", "[")):
             return json.loads(body)
         return body
+
+
+def guacamole_status(ttl_seconds=10):
+    if not GUACAMOLE_URL:
+        return {"available": False, "message": "Guacamole is not configured."}
+    now = time.time()
+    if now - GUACAMOLE_STATUS_CACHE["checked_at"] < ttl_seconds:
+        return {
+            "available": GUACAMOLE_STATUS_CACHE["available"],
+            "message": GUACAMOLE_STATUS_CACHE["message"],
+        }
+    check_url = GUACAMOLE_URL + "/"
+    try:
+        context = ssl._create_unverified_context()
+        with urllib.request.urlopen(check_url, timeout=1.5, context=context) as response:
+            available = 200 <= response.status < 500
+            message = f"HTTP {response.status}"
+    except Exception as exc:
+        available = False
+        message = str(exc)
+    GUACAMOLE_STATUS_CACHE.update({
+        "checked_at": now,
+        "available": available,
+        "message": message,
+    })
+    return {"available": available, "message": message}
 
 
 def build_guacamole_uri(target, user="", password=""):
@@ -109,6 +136,7 @@ def public_guacamole_url(request_host=""):
 def guacamole_quickconnect(target, user="", password="", public_url=""):
     quickconnect_uri = build_guacamole_uri(target, user, password)
     display_url = public_url or GUACAMOLE_URL
+    status = guacamole_status(ttl_seconds=0)
     if not GUACAMOLE_URL:
         return {
             "ok": False,
@@ -116,6 +144,14 @@ def guacamole_quickconnect(target, user="", password="", public_url=""):
             "guacamoleUrl": "",
             "quickconnectUri": quickconnect_uri,
             "message": "Guacamole is not configured.",
+        }
+    if not status["available"]:
+        return {
+            "ok": False,
+            "mode": "unavailable",
+            "guacamoleUrl": display_url,
+            "quickconnectUri": quickconnect_uri,
+            "message": "Guacamole is not reachable: " + status["message"],
         }
 
     fallback = {
@@ -791,8 +827,11 @@ class EnvPortalHandler(SimpleHTTPRequestHandler):
             return
 
         if path == "/portal_config.jsp":
+            guac_status = guacamole_status()
             self.send_bytes(json_bytes({
                 "guacamoleEnabled": bool(GUACAMOLE_URL),
+                "guacamoleAvailable": guac_status["available"],
+                "guacamoleStatus": guac_status["message"],
                 "guacamoleUrl": public_guacamole_url(self.headers.get("Host", "")),
                 "guacamoleAutoLogin": bool(GUACAMOLE_URL and GUACAMOLE_USERNAME and GUACAMOLE_PASSWORD),
             }), "application/json; charset=utf-8")

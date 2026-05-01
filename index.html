@@ -865,7 +865,8 @@
             const rdpDownloadBtn = matchedRdp && remoteType === 'RDP' && remoteTarget
                 ? `<button id="${rdpDownloadBtnId}" class="icon-btn" disabled onclick="openRdpConnection('${escapeJs(matchedRdp['接続先(IP:Port)'])}', '${escapeJs(matchedRdp['RDPユーザー名'])}', '${escapeJs(matchedRdp['RDPパスワード'])}', '${escapeJs(env['組織名'])}', '${escapeJs(env['構築環境名'])}')" title="${t('button.connectRdp')}" aria-label="${t('button.connectRdp')}">${remoteConnectIcon()}</button>`
                 : '';
-            const guacamoleBtn = matchedRdp && remoteType === 'RDP' && remoteTarget && portalConfig.guacamoleEnabled
+            const guacamoleAvailable = portalConfig.guacamoleEnabled && portalConfig.guacamoleAvailable !== false;
+            const guacamoleBtn = matchedRdp && remoteType === 'RDP' && remoteTarget && guacamoleAvailable
                 ? `<button id="${rdpDownloadBtnId}_guac" class="icon-btn" disabled onclick="openGuacamoleConnection('${escapeJs(matchedRdp['接続先(IP:Port)'])}', '${escapeJs(matchedRdp['RDPユーザー名'])}', '${escapeJs(matchedRdp['RDPパスワード'])}')" title="${t('button.openGuacamole')}" aria-label="${t('button.openGuacamole')}">${browserRemoteIcon()}</button>`
                 : '';
             const rdpCertBtn = matchedRdp && remoteType === 'RDP'
@@ -1182,7 +1183,7 @@
         }
 
         function openGuacamoleConnection(target, user, password) {
-            if (!portalConfig.guacamoleEnabled) {
+            if (!portalConfig.guacamoleEnabled || portalConfig.guacamoleAvailable === false) {
                 showToast(t('toast.guacamoleDisabled'));
                 return;
             }

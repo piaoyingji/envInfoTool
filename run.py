@@ -112,10 +112,10 @@ def ensure_windows_firewall_ports(ports):
         return
 
     if not is_windows_admin():
-        print("Windows Firewall was not changed because this terminal is not running as Administrator.")
-        print("Run these commands in an elevated PowerShell if LAN clients cannot connect:")
-        for port in unique_ports:
-            print(f"  New-NetFirewallRule -DisplayName 'EnvPortal TCP {port}' -Direction Inbound -Action Allow -Protocol TCP -LocalAddress Any -RemoteAddress Any -LocalPort {port} -Profile Any")
+        if load_env_value("FIREWALL_AUTO_ELEVATE", "true").lower() in ("1", "true", "yes", "on"):
+            if elevate_firewall_rules(unique_ports):
+                return
+        print_firewall_commands(unique_ports)
         return
 
     for port in unique_ports:
@@ -145,6 +145,63 @@ def ensure_windows_firewall_ports(ports):
             print(f"Windows Firewall rule {display_name}: {state}")
         except Exception as exc:
             print(f"Windows Firewall rule {display_name} could not be verified: {exc}")
+
+
+def firewall_rule_script(ports):
+    lines = [
+        "$ErrorActionPreference = 'Stop'",
+    ]
+    for port in ports:
+        display_name = f"EnvPortal TCP {port}"
+        lines.extend([
+            f"$name = '{display_name}'",
+            "$rule = Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue",
+            "if (-not $rule) {",
+            f"  New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Protocol TCP -LocalAddress Any -RemoteAddress Any -LocalPort {port} -Profile Any | Out-Null",
+            "  Write-Output \"created $name\"",
+            "} else {",
+            "  $rule | Set-NetFirewallRule -Enabled True -Direction Inbound -Action Allow -Profile Any | Out-Null",
+            "  $rule | Get-NetFirewallAddressFilter | Set-NetFirewallAddressFilter -LocalAddress Any -RemoteAddress Any | Out-Null",
+            f"  $rule | Get-NetFirewallPortFilter | Set-NetFirewallPortFilter -Protocol TCP -LocalPort {port} | Out-Null",
+            "  Write-Output \"updated $name\"",
+            "}",
+        ])
+    return "\n".join(lines) + "\n"
+
+
+def elevate_firewall_rules(ports):
+    temp_dir = BASE_DIR / ".tmp"
+    temp_dir.mkdir(exist_ok=True)
+    script_path = temp_dir / "envportal_firewall.ps1"
+    script_path.write_text(firewall_rule_script(ports), encoding="utf-8-sig")
+    try:
+        print("Windows Firewall needs Administrator permission. Requesting elevation...")
+        command = (
+            f"Start-Process powershell "
+            f"-ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \"{script_path}\"' "
+            "-Verb RunAs -Wait"
+        )
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode == 0:
+            print("Windows Firewall elevated update completed.")
+            return True
+        print("Windows Firewall elevation was not completed.")
+    except Exception as exc:
+        print(f"Windows Firewall elevation failed: {exc}")
+    print_firewall_commands(ports)
+    return False
+
+
+def print_firewall_commands(ports):
+    print("Windows Firewall was not changed because this terminal is not running as Administrator.")
+    print("Run these commands in an elevated PowerShell if LAN clients cannot connect:")
+    for port in ports:
+        print(f"  New-NetFirewallRule -DisplayName 'EnvPortal TCP {port}' -Direction Inbound -Action Allow -Protocol TCP -LocalAddress Any -RemoteAddress Any -LocalPort {port} -Profile Any")
 
 
 def check_local_tcp_port(port, label):

@@ -2,6 +2,16 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.5] - 2026-05-01
+
+### Fixed
+
+- Changed Guacamole availability from static configuration to a live backend reachability check.
+- Hid browser remote-control buttons when Guacamole is configured but not actually reachable on the deployment server.
+- Added explicit unavailable responses for Guacamole connection requests.
+- Changed Docker Compose port binding to `0.0.0.0:8088:8080`.
+- Added optional UAC elevation for Windows Firewall rule creation when EnvPortal is started without Administrator rights.
+
 ## [2.1.4] - 2026-05-01
 
 ### Added
