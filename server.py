@@ -5,6 +5,7 @@ import json
 import os
 import re
 import signal
+import shutil
 import socket
 import ssl
 import subprocess
@@ -36,6 +37,15 @@ def load_env():
 
 
 CONFIG = load_env()
+
+
+def env_float(name, default):
+    try:
+        return float(CONFIG.get(name, str(default)) or default)
+    except ValueError:
+        return float(default)
+
+
 PORT = int(CONFIG.get("PORT", "8080"))
 BIND_ADDRESS = CONFIG.get("BIND_ADDRESS", "0.0.0.0")
 AUTH_PASSWORD = CONFIG.get("AUTH_PASSWORD", "nho1234567")
@@ -47,6 +57,9 @@ GUACAMOLE_USERNAME = CONFIG.get("GUACAMOLE_USERNAME", "")
 GUACAMOLE_PASSWORD = CONFIG.get("GUACAMOLE_PASSWORD", "")
 GUACAMOLE_STATUS_CACHE = {"checked_at": 0, "available": False, "message": "not checked"}
 GUACAMOLE_DRIVE_ROOT = BASE_DIR / "guacamole-drive"
+GUACAMOLE_DRIVE_RETENTION_HOURS = env_float("GUACAMOLE_DRIVE_RETENTION_HOURS", 24)
+GUACAMOLE_DRIVE_CLEANUP_INTERVAL_SECONDS = 3600
+GUACAMOLE_DRIVE_LAST_CLEANUP = 0
 
 
 def json_bytes(payload):
@@ -144,7 +157,33 @@ def guacamole_token():
         return "", "", str(exc)
 
 
+def cleanup_guacamole_drive_sessions(force=False):
+    global GUACAMOLE_DRIVE_LAST_CLEANUP
+    if GUACAMOLE_DRIVE_RETENTION_HOURS <= 0:
+        return
+    now = time.time()
+    if not force and now - GUACAMOLE_DRIVE_LAST_CLEANUP < GUACAMOLE_DRIVE_CLEANUP_INTERVAL_SECONDS:
+        return
+    GUACAMOLE_DRIVE_LAST_CLEANUP = now
+    sessions_root = GUACAMOLE_DRIVE_ROOT / "sessions"
+    if not sessions_root.exists():
+        return
+    cutoff = now - (GUACAMOLE_DRIVE_RETENTION_HOURS * 3600)
+    for session_dir in sessions_root.iterdir():
+        try:
+            if not session_dir.is_dir():
+                continue
+            last_changed = session_dir.stat().st_mtime
+            for path in session_dir.rglob("*"):
+                last_changed = max(last_changed, path.stat().st_mtime)
+            if last_changed < cutoff:
+                shutil.rmtree(session_dir)
+        except OSError:
+            continue
+
+
 def new_guacamole_drive_path():
+    cleanup_guacamole_drive_sessions()
     session_id = uuid.uuid4().hex
     host_path = GUACAMOLE_DRIVE_ROOT / "sessions" / session_id
     try:
@@ -1045,6 +1084,7 @@ class EnvPortalHandler(SimpleHTTPRequestHandler):
 
 
 def main():
+    cleanup_guacamole_drive_sessions(force=True)
     host = "" if BIND_ADDRESS in ("*", "+", "0.0.0.0") else BIND_ADDRESS
     server = ThreadingHTTPServer((host, PORT), EnvPortalHandler)
     server.daemon_threads = True

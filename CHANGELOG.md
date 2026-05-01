@@ -2,6 +2,13 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.20] - 2026-05-01
+
+### Added
+
+- Added automatic cleanup for Guacamole per-connection drive session directories.
+- Added `GUACAMOLE_DRIVE_RETENTION_HOURS` to control how long shared-drive session files are retained.
+
 ## [2.1.19] - 2026-05-01
 
 ### Changed
