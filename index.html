@@ -47,8 +47,42 @@
         }
         .org-badges-wrapper {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 0.7rem;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 0.9rem;
+            align-items: start;
+        }
+        .env-flow-item {
+            min-width: 0;
+            transition: grid-column 0.42s ease;
+        }
+        .env-flow-item.expanded {
+            grid-column: span 2;
+        }
+        .env-flow-item.expanded .env-card {
+            max-width: 620px;
+            width: 100%;
+            box-shadow: none;
+            border-color: #b8e2ea;
+            animation: inlineCardIn 0.52s ease both;
+        }
+        .env-flow-item.expanded .env-card h3 {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .env-flow-item.expanded .env-card h3 .env-title-line {
+            min-width: 0;
+        }
+        @media (max-width: 900px) {
+            .org-badges-wrapper {
+                grid-template-columns: 1fr;
+            }
+            .env-flow-item.expanded {
+                grid-column: span 1;
+            }
+            .env-flow-item.expanded .env-card {
+                max-width: none;
+            }
         }
         .env-badge {
             display: block;
@@ -59,7 +93,7 @@
             border: 1px solid var(--border);
             border-radius: 8px;
             cursor: pointer;
-            max-height: 180px;
+            min-height: 88px;
             transition: opacity 0.42s ease, max-height 0.42s ease, padding 0.42s ease, border-width 0.42s ease, transform 0.42s ease, box-shadow 0.22s ease, background 0.22s ease, border-color 0.22s ease;
             min-width: 0;
         }
@@ -68,17 +102,6 @@
             background: #ecf9fb;
             box-shadow: 0 6px 18px rgba(8,126,164,0.1);
             transform: translateY(-1px);
-        }
-        .env-badge.expanded {
-            opacity: 0;
-            max-height: 0;
-            min-height: 0;
-            padding-top: 0;
-            padding-bottom: 0;
-            border-width: 0;
-            overflow: hidden;
-            pointer-events: none;
-            transform: scale(0.98);
         }
         .env-summary-main {
             display: flex;
@@ -100,6 +123,37 @@
             font-size: 0.72rem;
             white-space: nowrap;
         }
+        .env-summary-title {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            min-width: 0;
+        }
+        .env-expand-btn,
+        .env-collapse-btn {
+            width: 30px;
+            height: 28px;
+            border: 1px solid #b8dbe6;
+            border-radius: 6px;
+            background: #fff;
+            color: var(--primary);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-weight: 700;
+            transition: all 0.18s ease;
+            flex: 0 0 auto;
+        }
+        .env-expand-btn:hover,
+        .env-collapse-btn:hover {
+            border-color: var(--primary);
+            background: #e9f8fb;
+            transform: translateY(-1px);
+        }
+        .env-collapse-btn {
+            margin-left: auto;
+        }
         .env-summary-tags {
             display: flex;
             flex-wrap: wrap;
@@ -118,15 +172,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-        }
-        .inline-env-card-slot {
-            margin-top: 0.9rem;
-        }
-        .inline-env-card-slot .env-card {
-            width: min(100%, 488px);
-            box-shadow: none;
-            border-color: #b8e2ea;
-            animation: inlineCardIn 0.42s ease both;
         }
         @keyframes inlineCardIn {
             from {
@@ -163,6 +208,16 @@
         .tag-filter-card {
             padding: 1rem 1.25rem;
             border-radius: 10px;
+        }
+        .home-container {
+            width: min(100% - 2rem, 1440px);
+            margin: 0 auto;
+            padding: 0 0 2rem;
+        }
+        @media (max-width: 1100px) {
+            .home-container {
+                width: calc(100% - 1rem);
+            }
         }
         .tag-filter-title {
             display: flex;
@@ -441,7 +496,7 @@
         </nav>
     </header>
 
-    <div class="container" style="max-width: 1000px; margin: 0 auto; padding: 0 1rem;">
+    <div class="container home-container">
         <div class="card tag-filter-card">
             <div class="tag-filter-title">
                 <label data-i18n="filter.tags">タグで絞り込み</label>
@@ -701,7 +756,6 @@
                     <div class="org-badges-wrapper">
                         ${envHtml}
                     </div>
-                    <div id="inline_env_${sanitizeId(org.key)}" class="inline-env-card-slot" onmouseenter="cancelInlineCollapse('${escapeJs(org.key)}')" onmouseleave="scheduleInlineCollapse('${escapeJs(org.key)}')"></div>
                 `;
                 wrapper.appendChild(card);
             });
@@ -740,6 +794,14 @@
         }
 
         function renderEnvSummaryBadge(orgKey, env, index) {
+            return `
+                <div id="env_item_${sanitizeId(orgKey)}_${index}" class="env-flow-item">
+                    ${renderEnvSummaryContent(orgKey, env, index)}
+                </div>
+            `;
+        }
+
+        function renderEnvSummaryContent(orgKey, env, index) {
             const envName = sanitizeHTML(env['構築環境名']);
             const host = sanitizeHTML(getHost(env['URL']));
             const url = sanitizeHTML(env['URL']);
@@ -751,9 +813,12 @@
             const meta = dbType ? `${sanitizeHTML(dbType)}${dbVersion ? ' ' + sanitizeHTML(dbVersion) : ''}` : (host || '');
             const badgeId = `env_badge_${sanitizeId(orgKey)}_${index}`;
             return `
-                <div id="${badgeId}" class="env-badge" onmouseenter="expandInlineEnv('${escapeJs(orgKey)}', ${index})" onclick="expandInlineEnv('${escapeJs(orgKey)}', ${index})">
+                <div id="${badgeId}" class="env-badge">
                     <div class="env-summary-main">
-                        <span class="env-summary-name">◆ ${envName}</span>
+                        <div class="env-summary-title">
+                            <button type="button" class="env-expand-btn" onclick="expandInlineEnv('${escapeJs(orgKey)}', ${index})" title="Expand" aria-label="Expand">⌄</button>
+                            <span class="env-summary-name">◆ ${envName}</span>
+                        </div>
                         ${meta ? `<span class="env-summary-meta">${meta}</span>` : ''}
                     </div>
                     ${tags.length > 0 ? `<div class="env-summary-tags">${visibleTags}${overflow}</div>` : ''}
@@ -983,44 +1048,38 @@
         }
 
         function expandInlineEnv(orgKey, envIndex) {
-            cancelInlineCollapse(orgKey);
-            const slot = document.getElementById('inline_env_' + sanitizeId(orgKey));
-            if (!slot) return;
+            const item = document.getElementById(`env_item_${sanitizeId(orgKey)}_${envIndex}`);
+            if (!item || item.classList.contains('expanded')) return;
             const envs = getFilteredData().filter(item => getOrgGroup(item).key === orgKey);
             const env = envs[envIndex];
             if (!env) return;
-            restoreInlineBadges(orgKey);
-            const badge = document.getElementById(`env_badge_${sanitizeId(orgKey)}_${envIndex}`);
-            if (badge) badge.classList.add('expanded');
-            slot.innerHTML = '';
-            renderEnvironmentCard(env, false, slot);
-            scheduleInlineCollapse(orgKey);
-            slot.onmouseenter = () => cancelInlineCollapse(orgKey);
-            slot.onmouseleave = () => scheduleInlineCollapse(orgKey);
-        }
-
-        function scheduleInlineCollapse(orgKey) {
-            const slot = document.getElementById('inline_env_' + sanitizeId(orgKey));
-            if (!slot) return;
-            cancelInlineCollapse(orgKey);
-            slot.dataset.collapseTimer = String(setTimeout(() => {
-                slot.innerHTML = '';
-                restoreInlineBadges(orgKey);
-                delete slot.dataset.collapseTimer;
-            }, 30000));
-        }
-
-        function restoreInlineBadges(orgKey) {
-            const prefix = `env_badge_${sanitizeId(orgKey)}_`;
-            document.querySelectorAll(`[id^="${prefix}"]`).forEach(badge => badge.classList.remove('expanded'));
-        }
-
-        function cancelInlineCollapse(orgKey) {
-            const slot = document.getElementById('inline_env_' + sanitizeId(orgKey));
-            if (slot && slot.dataset.collapseTimer) {
-                clearTimeout(Number(slot.dataset.collapseTimer));
-                delete slot.dataset.collapseTimer;
+            item.innerHTML = '';
+            item.classList.add('expanded');
+            renderEnvironmentCard(env, false, item);
+            const card = item.querySelector('.env-card');
+            if (card) {
+                const closeBtn = document.createElement('button');
+                closeBtn.type = 'button';
+                closeBtn.className = 'env-collapse-btn';
+                closeBtn.title = 'Collapse';
+                closeBtn.setAttribute('aria-label', 'Collapse');
+                closeBtn.textContent = '⌃';
+                closeBtn.onclick = () => collapseInlineEnv(orgKey, item);
+                const header = card.querySelector('h3');
+                if (header) header.appendChild(closeBtn);
             }
+        }
+
+        function collapseInlineEnv(orgKey, item) {
+            if (!item) return;
+            const match = item.id.match(/_(\d+)$/);
+            const envIndex = match ? Number(match[1]) : -1;
+            if (envIndex < 0) return;
+            const envs = getFilteredData().filter(row => getOrgGroup(row).key === orgKey);
+            const env = envs[envIndex];
+            if (!env) return;
+            item.classList.remove('expanded');
+            item.innerHTML = renderEnvSummaryContent(orgKey, env, envIndex);
         }
 
         function sanitizeId(str) {

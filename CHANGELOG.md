@@ -2,6 +2,14 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.17] - 2026-05-01
+
+### Changed
+
+- Reworked the home page organization summary into a wider responsive layout.
+- Changed environment expansion from hover/auto-collapse behavior to explicit expand and collapse buttons.
+- Changed multi-environment organization summaries to use an in-flow responsive grid so expanded cards stay aligned.
+
 ## [2.1.16] - 2026-05-01
 
 ### Added
