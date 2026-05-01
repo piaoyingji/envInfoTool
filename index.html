@@ -538,6 +538,14 @@
     <!-- 弹窗提示 -->
     <div id="toast" data-i18n="toast.copied">コピーしました</div>
 
+    <div id="remoteLoadingOverlay" class="remote-loading-overlay" aria-live="polite" aria-busy="true">
+        <div class="remote-loading-dialog">
+            <div class="remote-loading-spinner"></div>
+            <div class="remote-loading-title" data-i18n="remote.loadingTitle">遠隔操作を準備中...</div>
+            <div class="remote-loading-message" data-i18n="remote.loadingMessage">接続画面が開くまでお待ちください</div>
+        </div>
+    </div>
+
     <script>
         let fullData = [];
         let rdpData = []; // RDP情報を保持
@@ -1240,17 +1248,29 @@
             window.open('rdp_signing_cert.cer', '_blank', 'noopener,noreferrer');
         }
 
+        function showRemoteLoading() {
+            const overlay = document.getElementById('remoteLoadingOverlay');
+            if (overlay) overlay.classList.add('active');
+        }
+
+        function hideRemoteLoading() {
+            const overlay = document.getElementById('remoteLoadingOverlay');
+            if (overlay) overlay.classList.remove('active');
+        }
+
         function isLocalPortal() {
             return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
         }
 
         function openRdpConnection(target, user, password, orgName, envName) {
+            showRemoteLoading();
             if (isLocalPortal()) {
                 connectRdp(target, user, password);
                 return;
             }
             copyRdpPasswordToClipboard(password)
-                .then(() => downloadRdpFile(target, user, '', orgName, envName, t('toast.rdpDownloadedForClient')));
+                .then(() => downloadRdpFile(target, user, '', orgName, envName, t('toast.rdpDownloadedForClient')))
+                .finally(hideRemoteLoading);
         }
 
         function openGuacamoleConnection(target, user, password) {
@@ -1258,6 +1278,7 @@
                 showToast(t('toast.guacamoleDisabled'));
                 return;
             }
+            showRemoteLoading();
             const params = new URLSearchParams();
             params.set('target', target || '');
             params.set('user', user || '');
@@ -1286,7 +1307,8 @@
                 .catch(err => {
                     console.error(err);
                     alert(t('error.network'));
-                });
+                })
+                .finally(hideRemoteLoading);
         }
 
         function connectRdp(target, user, password) {
@@ -1309,7 +1331,8 @@
                 .catch(err => {
                     console.error(err);
                     alert(t('error.network'));
-                });
+                })
+                .finally(hideRemoteLoading);
         }
 
         function copyRdpPasswordToClipboard(password) {
@@ -1377,7 +1400,7 @@
             params.set('org', orgName || '');
             params.set('env', envName || '');
 
-            fetch('rdp_file.jsp', {
+            return fetch('rdp_file.jsp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: params.toString()

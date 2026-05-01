@@ -2,6 +2,12 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.26] - 2026-05-01
+
+### Added
+
+- Added a full-screen loading overlay for remote connection actions to prevent repeated clicks while RDP or Guacamole sessions are being prepared.
+
 ## [2.1.25] - 2026-05-01
 
 ### Fixed
