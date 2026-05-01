@@ -6,6 +6,8 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+import ipaddress
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -244,6 +246,95 @@ def guacamole_port():
     return 8088
 
 
+def guacamole_backend_port():
+    value = load_env_value("GUACAMOLE_URL", "")
+    parsed = urllib.parse.urlparse(value)
+    if parsed.port:
+        return parsed.port
+    if parsed.scheme == "https":
+        return 443
+    if parsed.scheme == "http":
+        return 80
+    return 8088
+
+
+def local_lan_ips():
+    values = []
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            ip = info[4][0]
+            if ip and not ip.startswith("127.") and ip not in values:
+                values.append(ip)
+    except Exception:
+        pass
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.connect(("8.8.8.8", 80))
+        ip = probe.getsockname()[0]
+        if ip and not ip.startswith("127.") and ip not in values:
+            values.append(ip)
+        probe.close()
+    except Exception:
+        pass
+    return values
+
+
+def ensure_guacamole_https_cert():
+    cert_dir = BASE_DIR / "certs"
+    cert_path = cert_dir / "guacamole.crt"
+    key_path = cert_dir / "guacamole.key"
+    if cert_path.exists() and key_path.exists():
+        return
+
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.x509.oid import NameOID
+    except Exception as exc:
+        print(f"Guacamole HTTPS certificate could not be generated: {exc}")
+        print("Install cryptography or place certs/guacamole.crt and certs/guacamole.key manually.")
+        return
+
+    cert_dir.mkdir(exist_ok=True)
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    names = [
+        x509.DNSName("localhost"),
+        x509.DNSName(socket.gethostname()),
+        x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+    ]
+    for ip in local_lan_ips():
+        try:
+            names.append(x509.IPAddress(ipaddress.ip_address(ip)))
+        except ValueError:
+            pass
+
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, "EnvPortal Guacamole HTTPS"),
+    ])
+    now = datetime.now(timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=1825))
+        .add_extension(x509.SubjectAlternativeName(names), critical=False)
+        .sign(key, hashes.SHA256())
+    )
+
+    key_path.write_bytes(key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ))
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    print(f"Generated Guacamole HTTPS certificate: {cert_path}")
+
+
 def is_windows_admin():
     if os.name != "nt":
         return False
@@ -467,6 +558,7 @@ def start_guacamole_if_available():
     compose_file = BASE_DIR / "docker-compose.guacamole.yml"
     if not compose_file.exists():
         return
+    ensure_guacamole_https_cert()
     command = docker_command()
     if not command:
         if start_docker_desktop_if_available():
@@ -513,7 +605,7 @@ def install_requirements():
 def main():
     os.chdir(BASE_DIR)
     install_requirements()
-    ensure_windows_firewall_ports([env_int("PORT", 8080), guacamole_port()])
+    ensure_windows_firewall_ports([env_int("PORT", 8080), guacamole_port(), guacamole_backend_port()])
     start_guacamole_if_available()
     import server
     server.main()

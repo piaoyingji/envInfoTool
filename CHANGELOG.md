@@ -2,6 +2,15 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.15] - 2026-05-01
+
+### Added
+
+- Added an nginx HTTPS sidecar for the bundled Guacamole instance on port `8443`.
+- Added automatic self-signed Guacamole HTTPS certificate generation in `certs/guacamole.crt` and `certs/guacamole.key`.
+- Added firewall handling for both the Guacamole HTTPS public port and backend HTTP port.
+- Changed the default Guacamole public URL to HTTPS.
+
 ## [2.1.14] - 2026-05-01
 
 ### Fixed

@@ -232,16 +232,15 @@ def create_guacamole_rdp_connection(target, user="", password="", token="", data
 
 
 def public_guacamole_url(request_host=""):
-    if GUACAMOLE_PUBLIC_URL:
-        return GUACAMOLE_PUBLIC_URL
-    if not GUACAMOLE_URL:
+    source_url = GUACAMOLE_PUBLIC_URL or GUACAMOLE_URL
+    if not source_url:
         return ""
-    parsed = urllib.parse.urlparse(GUACAMOLE_URL)
+    parsed = urllib.parse.urlparse(source_url)
     if parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
-        return GUACAMOLE_URL
+        return source_url
     host_header = str(request_host or "").split(":")[0].strip()
     if not host_header or host_header in ("localhost", "127.0.0.1", "::1"):
-        return GUACAMOLE_URL
+        return source_url
     netloc = host_header
     if parsed.port:
         netloc += f":{parsed.port}"
