@@ -5,6 +5,7 @@ import json
 import os
 import re
 import signal
+import socket
 import ssl
 import subprocess
 import sys
@@ -529,6 +530,28 @@ def friendly_db_error(message):
     return text
 
 
+def local_lan_ips():
+    values = []
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            ip = info[4][0]
+            if ip and not ip.startswith("127.") and ip not in values:
+                values.append(ip)
+    except Exception:
+        pass
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.connect(("8.8.8.8", 80))
+        ip = probe.getsockname()[0]
+        if ip and not ip.startswith("127.") and ip not in values:
+            values.append(ip)
+        probe.close()
+    except Exception:
+        pass
+    return values
+
+
 def add_platform_score(scores, name, points, evidence):
     if not name:
         return
@@ -812,7 +835,13 @@ def main():
     print(f" Binding:   http://{display_bind}:{PORT}/")
     print(f" Local URL: http://localhost:{PORT}/index.html")
     if display_bind == "0.0.0.0":
-        print(f" LAN URL:   http://<this-machine-ip>:{PORT}/index.html")
+        lan_urls = [f"http://{ip}:{PORT}/index.html" for ip in local_lan_ips()]
+        if lan_urls:
+            for index, url in enumerate(lan_urls):
+                label = "LAN URL:  " if index == 0 else "          "
+                print(f" {label} {url}")
+        else:
+            print(f" LAN URL:   http://<this-machine-ip>:{PORT}/index.html")
     print(" Press Ctrl+C to stop.")
     print("=================================================")
     try:

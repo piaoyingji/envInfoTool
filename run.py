@@ -1,7 +1,9 @@
 import os
 import shlex
+import socket
 import subprocess
 import sys
+import urllib.parse
 from pathlib import Path
 
 
@@ -68,6 +70,86 @@ def load_env_value(name, default=""):
     return default
 
 
+def env_int(name, default):
+    try:
+        return int(load_env_value(name, str(default)))
+    except ValueError:
+        return default
+
+
+def guacamole_port():
+    for name in ("GUACAMOLE_PUBLIC_URL", "GUACAMOLE_URL"):
+        value = load_env_value(name, "")
+        if not value:
+            continue
+        parsed = urllib.parse.urlparse(value)
+        if parsed.port:
+            return parsed.port
+        if parsed.scheme == "https":
+            return 443
+        if parsed.scheme == "http":
+            return 80
+    return 8088
+
+
+def is_windows_admin():
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def ensure_windows_firewall_ports(ports):
+    if os.name != "nt":
+        return
+    unique_ports = sorted({int(port) for port in ports if int(port) > 0})
+    if not unique_ports:
+        return
+
+    if not is_windows_admin():
+        print("Windows Firewall was not changed because this terminal is not running as Administrator.")
+        print("Run these commands in an elevated PowerShell if LAN clients cannot connect:")
+        for port in unique_ports:
+            print(f"  New-NetFirewallRule -DisplayName 'EnvPortal TCP {port}' -Direction Inbound -Action Allow -Protocol TCP -LocalPort {port} -Profile Any")
+        return
+
+    for port in unique_ports:
+        display_name = f"EnvPortal TCP {port}"
+        script = (
+            f"$name = '{display_name}'; "
+            "$rule = Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue; "
+            "if (-not $rule) { "
+            f"New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Protocol TCP -LocalPort {port} -Profile Any | Out-Null; "
+            "Write-Output 'created' "
+            "} else { Write-Output 'exists' }"
+        )
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=True,
+            )
+            state = (result.stdout or "").strip() or "ok"
+            print(f"Windows Firewall rule {display_name}: {state}")
+        except Exception as exc:
+            print(f"Windows Firewall rule {display_name} could not be verified: {exc}")
+
+
+def check_local_tcp_port(port, label):
+    try:
+        with socket.create_connection(("127.0.0.1", int(port)), timeout=1.5):
+            print(f"{label} local port check: 127.0.0.1:{port} is reachable.")
+            return True
+    except Exception:
+        print(f"{label} local port check: 127.0.0.1:{port} is not reachable yet.")
+        return False
+
+
 def start_guacamole_if_available():
     if load_env_value("GUACAMOLE_AUTO_START", "true").lower() not in ("1", "true", "yes", "on"):
         return
@@ -87,6 +169,7 @@ def start_guacamole_if_available():
             print("Starting Guacamole with Docker...")
             print("Docker command:", " ".join(command["command"]))
             subprocess.run(command["command"] + ["-f", str(compose_file), "up", "-d"], cwd=BASE_DIR, check=True)
+        check_local_tcp_port(guacamole_port(), "Guacamole")
     except Exception as exc:
         print(f"Guacamole auto-start failed: {exc}")
 
@@ -101,6 +184,7 @@ def install_requirements():
 def main():
     os.chdir(BASE_DIR)
     install_requirements()
+    ensure_windows_firewall_ports([env_int("PORT", 8080), guacamole_port()])
     start_guacamole_if_available()
     import server
     server.main()

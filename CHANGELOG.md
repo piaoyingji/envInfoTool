@@ -2,6 +2,15 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.2] - 2026-05-01
+
+### Added
+
+- Added Windows Firewall startup checks for the EnvPortal and Guacamole TCP ports.
+- Added elevated PowerShell firewall commands to startup output when EnvPortal is not running as Administrator.
+- Added concrete LAN URL output based on detected local IPv4 addresses.
+- Added a local Guacamole port reachability check after Docker Compose startup.
+
 ## [2.1.1] - 2026-05-01
 
 ### Fixed
