@@ -858,7 +858,7 @@
             const remoteTarget = matchedRdp ? sanitizeHTML(matchedRdp['接続先(IP:Port)']) : '';
             const remoteUser = matchedRdp ? sanitizeHTML(matchedRdp['RDPユーザー名']) : '';
             const rdpDownloadBtn = matchedRdp && remoteType === 'RDP' && remoteTarget
-                ? `<button id="${rdpDownloadBtnId}" class="icon-btn" disabled onclick="connectRdp('${escapeJs(matchedRdp['接続先(IP:Port)'])}', '${escapeJs(matchedRdp['RDPユーザー名'])}', '${escapeJs(matchedRdp['RDPパスワード'])}')" title="${t('button.connectRdp')}" aria-label="${t('button.connectRdp')}">${remoteConnectIcon()}</button>`
+                ? `<button id="${rdpDownloadBtnId}" class="icon-btn" disabled onclick="openRdpConnection('${escapeJs(matchedRdp['接続先(IP:Port)'])}', '${escapeJs(matchedRdp['RDPユーザー名'])}', '${escapeJs(matchedRdp['RDPパスワード'])}', '${escapeJs(env['組織名'])}', '${escapeJs(env['構築環境名'])}')" title="${t('button.connectRdp')}" aria-label="${t('button.connectRdp')}">${remoteConnectIcon()}</button>`
                 : '';
             const rdpCertBtn = matchedRdp && remoteType === 'RDP'
                 ? `<button id="${rdpCertBtnId}" class="icon-btn" disabled onclick="downloadRdpSigningCert()" title="${t('button.downloadRdpCert')}" aria-label="${t('button.downloadRdpCert')}">${certificateIcon()}</button>`
@@ -1152,6 +1152,19 @@
             window.open('rdp_signing_cert.cer', '_blank', 'noopener,noreferrer');
         }
 
+        function isLocalPortal() {
+            return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+        }
+
+        function openRdpConnection(target, user, password, orgName, envName) {
+            if (isLocalPortal()) {
+                connectRdp(target, user, password);
+                return;
+            }
+            copyRdpPasswordToClipboard(password)
+                .then(() => downloadRdpFile(target, user, '', orgName, envName, t('toast.rdpDownloadedForClient')));
+        }
+
         function connectRdp(target, user, password) {
             const params = new URLSearchParams();
             params.set('target', target || '');
@@ -1205,7 +1218,7 @@
             });
         }
 
-        function downloadRdpFile(target, user, password, orgName, envName) {
+        function downloadRdpFile(target, user, password, orgName, envName, toastMessage) {
             const params = new URLSearchParams();
             params.set('target', target || '');
             params.set('user', user || '');
@@ -1233,7 +1246,7 @@
                     link.click();
                     document.body.removeChild(link);
                     URL.revokeObjectURL(url);
-                    showToast(t('toast.rdpDownloaded'));
+                    showToast(toastMessage || t('toast.rdpDownloaded'));
                 })
                 .catch(err => {
                     console.error(err);

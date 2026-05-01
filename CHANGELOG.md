@@ -2,6 +2,13 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.0.2] - 2026-05-01
+
+### Changed
+
+- Changed RDP connection behavior for non-local EnvPortal access. When the portal is opened through a LAN address, EnvPortal now downloads an `.rdp` file and copies the password to the client clipboard instead of trying to launch `mstsc.exe` on the server.
+- Kept direct backend `mstsc` launch only for `localhost`, `127.0.0.1`, and `::1` access.
+
 ## [2.0.1] - 2026-04-30
 
 ### Fixed
