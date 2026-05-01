@@ -2,6 +2,12 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.19] - 2026-05-01
+
+### Changed
+
+- Moved the home page environment summary expand button to the right-side action area for easier access.
+
 ## [2.1.18] - 2026-05-01
 
 ### Changed

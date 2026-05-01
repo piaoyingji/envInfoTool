@@ -123,10 +123,16 @@
             font-size: 0.72rem;
             white-space: nowrap;
         }
+        .env-summary-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.65rem;
+            margin-left: auto;
+            flex: 0 0 auto;
+        }
         .env-summary-title {
             display: flex;
             align-items: center;
-            gap: 0.7rem;
             min-width: 0;
         }
         .env-expand-btn,
@@ -816,10 +822,12 @@
                 <div id="${badgeId}" class="env-badge">
                     <div class="env-summary-main">
                         <div class="env-summary-title">
-                            <button type="button" class="env-expand-btn" onclick="expandInlineEnv('${escapeJs(orgKey)}', ${index})" title="Expand" aria-label="Expand">⌄</button>
                             <span class="env-summary-name">◆ ${envName}</span>
                         </div>
-                        ${meta ? `<span class="env-summary-meta">${meta}</span>` : ''}
+                        <div class="env-summary-actions">
+                            ${meta ? `<span class="env-summary-meta">${meta}</span>` : ''}
+                            <button type="button" class="env-expand-btn" onclick="expandInlineEnv('${escapeJs(orgKey)}', ${index})" title="Expand" aria-label="Expand">⌄</button>
+                        </div>
                     </div>
                     ${tags.length > 0 ? `<div class="env-summary-tags">${visibleTags}${overflow}</div>` : ''}
                     ${url ? `<div class="env-summary-url">${url}</div>` : ''}
