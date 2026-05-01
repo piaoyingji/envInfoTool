@@ -2,7 +2,7 @@
 
 EnvPortal 是一个面向运维和实施人员的轻量级环境档案门户，用来集中维护客户/机构、环境地址、登录信息、数据库信息、远程连接信息和自由标签。
 
-当前版本：`2.0.2`
+当前版本：`2.1.0`
 
 ## 核心能力
 
@@ -40,6 +40,9 @@ Linux / macOS:
 PORT=8999
 BIND_ADDRESS=0.0.0.0
 AUTH_PASSWORD=...
+GUACAMOLE_URL=
+GUACAMOLE_USERNAME=
+GUACAMOLE_PASSWORD=
 ```
 
 访问地址：
@@ -85,3 +88,20 @@ Windows 自带 `mstsc` 没有官方密码参数。EnvPortal 会尝试写入 Wind
 因此当前 RDP 连接按钮会同时把密码复制到剪贴板。若 Windows 弹出密码输入框，直接粘贴即可。
 
 当 EnvPortal 不是从本机 `localhost` 访问，而是通过例如 `http://192.168.20.38:8999` 访问时，网页不能直接启动访问者电脑上的 `mstsc.exe`。这种情况下，RDP 按钮会自动下载 `.rdp` 文件，并把密码复制到访问者电脑的剪贴板。
+
+## Guacamole 网页远程桌面
+
+EnvPortal 支持 Apache Guacamole QuickConnect 试集成。配置 `.env`：
+
+```env
+GUACAMOLE_URL=http://192.168.20.38:8080/guacamole
+GUACAMOLE_USERNAME=guacadmin
+GUACAMOLE_PASSWORD=...
+```
+
+配置后，RDP 环境会出现“浏览器远程控制”按钮。行为如下：
+
+- 配置了 Guacamole 用户名/密码时，EnvPortal 会尝试调用 Guacamole QuickConnect API 并直接打开浏览器远程桌面。
+- 未配置用户名/密码时，EnvPortal 会复制 `rdp://...` QuickConnect URI 并打开 Guacamole 首页，用户可粘贴到 QuickConnect 输入框。
+
+Guacamole 侧需要安装并启用 QuickConnect extension。

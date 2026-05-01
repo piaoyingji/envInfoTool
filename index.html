@@ -477,6 +477,7 @@
         let fullData = [];
         let rdpData = []; // RDP情報を保持
         let tagStore = {};
+        let portalConfig = {};
         let selectedTags = [];
         let isAuthenticated = false; // RDP表示の認証状態
         let currentOrgPage = 1;
@@ -507,10 +508,14 @@
             const p3 = fetch('tags.json?t=' + new Date().getTime(), { cache: 'no-store' })
                 .then(res => res.ok ? res.json() : {})
                 .catch(() => ({}));
+            const p4 = fetch('portal_config.jsp?t=' + new Date().getTime(), { cache: 'no-store' })
+                .then(res => res.ok ? res.json() : {})
+                .catch(() => ({}));
 
-            Promise.all([p1, p2, p3])
-                .then(([dataCsv, rdpCsv, tagsJson]) => {
+            Promise.all([p1, p2, p3, p4])
+                .then(([dataCsv, rdpCsv, tagsJson, configJson]) => {
                     tagStore = normalizeTagStore(tagsJson);
+                    portalConfig = configJson || {};
                     // data.csv 解析
                     Papa.parse(dataCsv, {
                         header: true, skipEmptyLines: true,
@@ -860,6 +865,9 @@
             const rdpDownloadBtn = matchedRdp && remoteType === 'RDP' && remoteTarget
                 ? `<button id="${rdpDownloadBtnId}" class="icon-btn" disabled onclick="openRdpConnection('${escapeJs(matchedRdp['接続先(IP:Port)'])}', '${escapeJs(matchedRdp['RDPユーザー名'])}', '${escapeJs(matchedRdp['RDPパスワード'])}', '${escapeJs(env['組織名'])}', '${escapeJs(env['構築環境名'])}')" title="${t('button.connectRdp')}" aria-label="${t('button.connectRdp')}">${remoteConnectIcon()}</button>`
                 : '';
+            const guacamoleBtn = matchedRdp && remoteType === 'RDP' && remoteTarget && portalConfig.guacamoleEnabled
+                ? `<button id="${rdpDownloadBtnId}_guac" class="icon-btn" disabled onclick="openGuacamoleConnection('${escapeJs(matchedRdp['接続先(IP:Port)'])}', '${escapeJs(matchedRdp['RDPユーザー名'])}', '${escapeJs(matchedRdp['RDPパスワード'])}')" title="${t('button.openGuacamole')}" aria-label="${t('button.openGuacamole')}">${browserRemoteIcon()}</button>`
+                : '';
             const rdpCertBtn = matchedRdp && remoteType === 'RDP'
                 ? `<button id="${rdpCertBtnId}" class="icon-btn" disabled onclick="downloadRdpSigningCert()" title="${t('button.downloadRdpCert')}" aria-label="${t('button.downloadRdpCert')}">${certificateIcon()}</button>`
                 : '';
@@ -889,6 +897,7 @@
                                 <div class="env-detail-label" style="color:var(--text-main);">${t('label.connection')}</div>
                                 <div class="env-detail-value">${remoteTarget || `<span style="color:#aaa;">${t('unset.value')}</span>`}</div>
                                 ${rdpDownloadBtn}
+                                ${guacamoleBtn}
                                 ${rdpCertBtn}
                                 <button class="icon-btn" onclick="copyText('${sanitizeHTML(matchedRdp['接続先(IP:Port)'])}')" title="${t('button.copy')}" aria-label="${t('button.copy')}">${copyIcon()}</button>
                             </div>
@@ -966,7 +975,8 @@
                 card.dataset.browseBtnId = browseBtnId;
                 card.dataset.rdpDownloadBtnId = rdpDownloadBtn ? rdpDownloadBtnId : '';
                 card.dataset.rdpCertBtnId = rdpCertBtn ? rdpCertBtnId : '';
-                updateStatusBadge(statusBadgeId, statusMetaId, safeUrl, urlLinkId, browseBtnId, card.dataset.rdpDownloadBtnId, card.dataset.rdpCertBtnId);
+                card.dataset.guacamoleBtnId = guacamoleBtn ? `${rdpDownloadBtnId}_guac` : '';
+                updateStatusBadge(statusBadgeId, statusMetaId, safeUrl, urlLinkId, browseBtnId, card.dataset.rdpDownloadBtnId, card.dataset.rdpCertBtnId, card.dataset.guacamoleBtnId);
                 scheduleStatusRefresh();
             }
         }
@@ -1026,11 +1036,11 @@
 
         function refreshVisibleStatuses() {
             document.querySelectorAll('[data-status-url]').forEach(el => {
-                updateStatusBadge(el.dataset.statusBadgeId, el.dataset.statusMetaId, el.dataset.statusUrl, el.dataset.urlLinkId, el.dataset.browseBtnId, el.dataset.rdpDownloadBtnId, el.dataset.rdpCertBtnId);
+                updateStatusBadge(el.dataset.statusBadgeId, el.dataset.statusMetaId, el.dataset.statusUrl, el.dataset.urlLinkId, el.dataset.browseBtnId, el.dataset.rdpDownloadBtnId, el.dataset.rdpCertBtnId, el.dataset.guacamoleBtnId);
             });
         }
 
-        function updateStatusBadge(statusBadgeId, statusMetaId, safeUrl, urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId) {
+        function updateStatusBadge(statusBadgeId, statusMetaId, safeUrl, urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId, guacamoleBtnId) {
             const badge = document.getElementById(statusBadgeId);
             const meta = document.getElementById(statusMetaId);
             const startedAt = performance.now();
@@ -1049,7 +1059,7 @@
                     if (!badge) return;
                     const status = String(info.status || '').trim();
                     renderStatusBadge(badge, status);
-                    updateUrlAccess(status, urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId);
+                    updateUrlAccess(status, urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId, guacamoleBtnId);
                     if (status === 'ERROR') {
                         throw new Error('env_check status error');
                     }
@@ -1076,7 +1086,7 @@
                             if (!badge) return;
                             const status = txt.trim();
                             renderStatusBadge(badge, status);
-                            updateUrlAccess(status, urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId);
+                            updateUrlAccess(status, urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId, guacamoleBtnId);
                             if (meta) {
                                 const elapsed = Math.round(performance.now() - startedAt);
                                 meta.innerHTML = [
@@ -1089,7 +1099,7 @@
                         .catch(() => {
                             if (!badge) return;
                             renderStatusBadge(badge, 'ERROR');
-                            updateUrlAccess('ERROR', urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId);
+                            updateUrlAccess('ERROR', urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId, guacamoleBtnId);
                             if (meta) {
                                 const elapsed = Math.round(performance.now() - startedAt);
                                 meta.innerHTML = [
@@ -1102,12 +1112,13 @@
                 });
         }
 
-        function updateUrlAccess(status, urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId) {
+        function updateUrlAccess(status, urlLinkId, browseBtnId, rdpDownloadBtnId, rdpCertBtnId, guacamoleBtnId) {
             const isAvailable = String(status).trim() === '200';
             const link = document.getElementById(urlLinkId);
             const browseBtn = document.getElementById(browseBtnId);
             const rdpDownloadBtn = document.getElementById(rdpDownloadBtnId);
             const rdpCertBtn = document.getElementById(rdpCertBtnId);
+            const guacamoleBtn = document.getElementById(guacamoleBtnId);
             if (link) {
                 if (isAvailable) {
                     link.href = link.dataset.href || link.textContent;
@@ -1120,6 +1131,7 @@
             if (browseBtn) browseBtn.disabled = !isAvailable;
             if (rdpDownloadBtn) rdpDownloadBtn.disabled = !isAvailable;
             if (rdpCertBtn) rdpCertBtn.disabled = !isAvailable;
+            if (guacamoleBtn) guacamoleBtn.disabled = !isAvailable;
         }
 
         function openBrowse(button) {
@@ -1148,6 +1160,10 @@
             return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-5"></path></svg>';
         }
 
+        function browserRemoteIcon() {
+            return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="M8 21h8"></path><path d="M12 18v3"></path><path d="M8 9h3"></path><path d="M13 9h3"></path><path d="M9 13h6"></path></svg>';
+        }
+
         function downloadRdpSigningCert() {
             window.open('rdp_signing_cert.cer', '_blank', 'noopener,noreferrer');
         }
@@ -1163,6 +1179,42 @@
             }
             copyRdpPasswordToClipboard(password)
                 .then(() => downloadRdpFile(target, user, '', orgName, envName, t('toast.rdpDownloadedForClient')));
+        }
+
+        function openGuacamoleConnection(target, user, password) {
+            if (!portalConfig.guacamoleEnabled) {
+                showToast(t('toast.guacamoleDisabled'));
+                return;
+            }
+            const params = new URLSearchParams();
+            params.set('target', target || '');
+            params.set('user', user || '');
+            params.set('password', password || '');
+
+            fetch('guacamole_connect.jsp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString()
+            })
+                .then(res => res.json().then(data => ({ ok: res.ok && data.ok, data })))
+                .then(({ ok, data }) => {
+                    if (!ok) throw new Error(data.message || 'Guacamole connection failed');
+                    if (data.mode === 'direct' && data.url) {
+                        window.open(data.url, '_blank', 'noopener,noreferrer');
+                        return;
+                    }
+                    if (data.quickconnectUri) {
+                        return copyTextSilently(data.quickconnectUri).then(() => {
+                            showToast(t('toast.guacamoleManual'));
+                            window.open(data.guacamoleUrl || portalConfig.guacamoleUrl, '_blank', 'noopener,noreferrer');
+                        });
+                    }
+                    window.open(data.guacamoleUrl || portalConfig.guacamoleUrl, '_blank', 'noopener,noreferrer');
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert(t('error.network'));
+                });
         }
 
         function connectRdp(target, user, password) {
@@ -1197,6 +1249,33 @@
                     .catch(() => fallbackCopyRdpPassword(value));
             }
             return fallbackCopyRdpPassword(value);
+        }
+
+        function copyTextSilently(text) {
+            const value = String(text || '');
+            if (!value) return Promise.resolve();
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                return navigator.clipboard.writeText(value).catch(() => fallbackCopyTextSilently(value));
+            }
+            return fallbackCopyTextSilently(value);
+        }
+
+        function fallbackCopyTextSilently(text) {
+            return new Promise(resolve => {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.top = '-9999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                } finally {
+                    document.body.removeChild(textArea);
+                    resolve();
+                }
+            });
         }
 
         function fallbackCopyRdpPassword(password) {

@@ -2,6 +2,15 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.0] - 2026-05-01
+
+### Added
+
+- Added Apache Guacamole QuickConnect trial integration for browser-based RDP control.
+- Added `GUACAMOLE_URL`, `GUACAMOLE_USERNAME`, and `GUACAMOLE_PASSWORD` configuration.
+- Added a browser remote-control button for RDP environments when Guacamole is configured.
+- Added fallback behavior that copies the Guacamole QuickConnect URI and opens Guacamole when API credentials are not configured.
+
 ## [2.0.2] - 2026-05-01
 
 ### Changed

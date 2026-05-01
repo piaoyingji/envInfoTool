@@ -38,6 +38,9 @@ BIND_ADDRESS = CONFIG.get("BIND_ADDRESS", "0.0.0.0")
 AUTH_PASSWORD = CONFIG.get("AUTH_PASSWORD", "nho1234567")
 RDP_SIGN_THUMBPRINT = CONFIG.get("RDP_SIGN_THUMBPRINT", "").replace(" ", "")
 RDP_CERT_SUBJECT = CONFIG.get("RDP_CERT_SUBJECT", "CN=EnvPortal RDP Signing")
+GUACAMOLE_URL = CONFIG.get("GUACAMOLE_URL", "").rstrip("/")
+GUACAMOLE_USERNAME = CONFIG.get("GUACAMOLE_USERNAME", "")
+GUACAMOLE_PASSWORD = CONFIG.get("GUACAMOLE_PASSWORD", "")
 
 
 def json_bytes(payload):
@@ -46,6 +49,90 @@ def json_bytes(payload):
 
 def parse_form(body):
     return {k: v[0] if v else "" for k, v in urllib.parse.parse_qs(body, keep_blank_values=True).items()}
+
+
+def http_post_form(url, data, timeout=8):
+    encoded = urllib.parse.urlencode(data).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=encoded,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    context = ssl._create_unverified_context()
+    with urllib.request.urlopen(req, timeout=timeout, context=context) as res:
+        body = res.read().decode("utf-8", errors="replace")
+        content_type = res.headers.get("Content-Type", "")
+        if "application/json" in content_type or body.strip().startswith(("{", "[")):
+            return json.loads(body)
+        return body
+
+
+def build_guacamole_uri(target, user="", password=""):
+    target = str(target or "").strip()
+    user = str(user or "").strip()
+    password = str(password or "")
+    authority = target
+    if user:
+        credential = urllib.parse.quote(user, safe="")
+        if password:
+            credential += ":" + urllib.parse.quote(password, safe="")
+        authority = credential + "@" + target
+    params = urllib.parse.urlencode({
+        "ignore-cert": "true",
+        "security": "any",
+        "disable-audio": "true",
+        "enable-wallpaper": "false",
+    })
+    return f"rdp://{authority}/?{params}"
+
+
+def guacamole_quickconnect(target, user="", password=""):
+    quickconnect_uri = build_guacamole_uri(target, user, password)
+    if not GUACAMOLE_URL:
+        return {
+            "ok": False,
+            "mode": "disabled",
+            "guacamoleUrl": "",
+            "quickconnectUri": quickconnect_uri,
+            "message": "Guacamole is not configured.",
+        }
+
+    fallback = {
+        "ok": True,
+        "mode": "manual",
+        "guacamoleUrl": GUACAMOLE_URL,
+        "quickconnectUri": quickconnect_uri,
+        "message": "Open Guacamole and paste the QuickConnect URI.",
+    }
+    if not GUACAMOLE_USERNAME or not GUACAMOLE_PASSWORD:
+        return fallback
+
+    try:
+        token_response = http_post_form(
+            f"{GUACAMOLE_URL}/api/tokens",
+            {"username": GUACAMOLE_USERNAME, "password": GUACAMOLE_PASSWORD},
+        )
+        token = token_response.get("authToken", "")
+        if not token:
+            return {**fallback, "message": "Guacamole token was not returned."}
+        created = http_post_form(
+            f"{GUACAMOLE_URL}/api/session/ext/quickconnect/create?token={urllib.parse.quote(token)}",
+            {"uri": quickconnect_uri},
+        )
+        identifier = created.get("identifier", "") if isinstance(created, dict) else ""
+        if not identifier:
+            return {**fallback, "message": "Guacamole QuickConnect did not return an identifier."}
+        return {
+            "ok": True,
+            "mode": "direct",
+            "url": f"{GUACAMOLE_URL}/#/client/{urllib.parse.quote(identifier)}?token={urllib.parse.quote(token)}",
+            "guacamoleUrl": GUACAMOLE_URL,
+            "quickconnectUri": quickconnect_uri,
+            "message": "",
+        }
+    except Exception as exc:
+        return {**fallback, "message": str(exc)}
 
 
 def safe_filename(value, fallback="remote"):
@@ -618,6 +705,16 @@ class EnvPortalHandler(SimpleHTTPRequestHandler):
             self.send_bytes(json_bytes({"ok": ok, "message": message}), "application/json; charset=utf-8", status=200 if ok else 500)
             return
 
+        if path == "/guacamole_connect.jsp":
+            form = parse_form(body)
+            target = form.get("target", "")
+            if not target.strip():
+                self.send_bytes(json_bytes({"ok": False, "message": "Missing RDP target"}), "application/json; charset=utf-8", status=400)
+                return
+            result = guacamole_quickconnect(target, form.get("user", ""), form.get("password", ""))
+            self.send_bytes(json_bytes(result), "application/json; charset=utf-8", status=200 if result.get("ok") else 500)
+            return
+
         update_map = {
             "/update_csv.jsp": "data.csv",
             "/update_rdp.jsp": "rdp.csv",
@@ -644,6 +741,14 @@ class EnvPortalHandler(SimpleHTTPRequestHandler):
         if path == "/env_check.jsp":
             url = query.get("url", [""])[0]
             self.send_bytes(json_bytes(env_check(url)), "application/json; charset=utf-8")
+            return
+
+        if path == "/portal_config.jsp":
+            self.send_bytes(json_bytes({
+                "guacamoleEnabled": bool(GUACAMOLE_URL),
+                "guacamoleUrl": GUACAMOLE_URL,
+                "guacamoleAutoLogin": bool(GUACAMOLE_URL and GUACAMOLE_USERNAME and GUACAMOLE_PASSWORD),
+            }), "application/json; charset=utf-8")
             return
 
         if path == "/rdp_signing_cert.cer":
