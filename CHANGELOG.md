@@ -2,6 +2,12 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.22] - 2026-05-01
+
+### Changed
+
+- Changed expanded home page environment cards to stay in the same responsive grid columns as summaries, allowing multiple expanded cards to sit side by side.
+
 ## [2.1.21] - 2026-05-01
 
 ### Changed

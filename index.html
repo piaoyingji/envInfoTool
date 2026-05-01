@@ -47,7 +47,7 @@
         }
         .org-badges-wrapper {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
             gap: 0.9rem;
             align-items: start;
         }
@@ -56,10 +56,10 @@
             transition: grid-column 0.42s ease;
         }
         .env-flow-item.expanded {
-            grid-column: span 2;
+            grid-column: auto;
         }
         .env-flow-item.expanded .env-card {
-            max-width: 620px;
+            max-width: none;
             width: 100%;
             box-shadow: none;
             border-color: #b8e2ea;
@@ -70,7 +70,7 @@
                 grid-template-columns: 1fr;
             }
             .env-flow-item.expanded {
-                grid-column: span 1;
+                grid-column: auto;
             }
             .env-flow-item.expanded .env-card {
                 max-width: none;
