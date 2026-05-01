@@ -2,6 +2,12 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.8] - 2026-05-01
+
+### Fixed
+
+- Added Docker Desktop's `resources\bin` directory to Docker subprocess PATH so `docker-credential-desktop.exe` can be found after a fresh Docker Desktop install.
+
 ## [2.1.7] - 2026-05-01
 
 ### Fixed

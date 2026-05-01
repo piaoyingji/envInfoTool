@@ -44,6 +44,25 @@ def docker_cli_candidates():
     return candidates
 
 
+def docker_subprocess_env(command=None):
+    env = os.environ.copy()
+    paths = []
+    if command and command.get("kind") == "windows":
+        executable = Path(command["command"][0])
+        if executable.is_absolute() and executable.parent.exists():
+            paths.append(str(executable.parent))
+    for base_dir in docker_desktop_base_dirs():
+        bin_dir = base_dir / "resources" / "bin"
+        if bin_dir.exists():
+            paths.append(str(bin_dir))
+    current_path = env.get("PATH", "")
+    existing = {item.lower() for item in current_path.split(os.pathsep) if item}
+    prepend = [item for item in paths if item.lower() not in existing]
+    if prepend:
+        env["PATH"] = os.pathsep.join(prepend + [current_path])
+    return env
+
+
 def wsl_path(path):
     resolved = Path(path).resolve()
     drive = resolved.drive.rstrip(":").lower()
@@ -61,7 +80,7 @@ def docker_command():
 
     for command, check, kind in checks:
         try:
-            subprocess.run(check, cwd=BASE_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            subprocess.run(check, cwd=BASE_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=docker_subprocess_env({"kind": kind, "command": command}), check=True)
             return {"kind": kind, "command": command}
         except Exception:
             continue
@@ -91,6 +110,7 @@ def docker_engine_ready(command):
                 ["docker", "info"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=docker_subprocess_env(command),
                 timeout=8,
             )
         else:
@@ -98,6 +118,7 @@ def docker_engine_ready(command):
                 [command["command"][0], "info"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=docker_subprocess_env(command),
                 timeout=8,
             )
         return result.returncode == 0
@@ -358,6 +379,7 @@ def run_compose(command, args, capture=False):
         cwd=BASE_DIR,
         capture_output=capture,
         text=True,
+        env=docker_subprocess_env(command),
         check=not capture,
     )
 

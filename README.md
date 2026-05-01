@@ -2,7 +2,7 @@
 
 EnvPortal 是一个面向运维和实施人员的轻量级环境档案门户，用来集中维护客户/机构、环境地址、登录信息、数据库信息、远程连接信息和自由标签。
 
-当前版本：`2.1.7`
+当前版本：`2.1.8`
 
 ## 核心能力
 
@@ -131,6 +131,8 @@ docker compose -f docker-compose.guacamole.yml up -d
 如果未检测到 Docker，EnvPortal 不会报错，只是不显示浏览器远程控制能力，仍保留 RDP 文件下载和密码复制。启动器会依次检查 Windows PATH、Docker Desktop 标准安装目录以及 WSL 内的 Docker。
 
 Windows 下未检测到 Docker 时，启动器会在可用 `winget` 的情况下提示是否安装 Docker Desktop。若 Docker Desktop 已安装但尚未启动，启动器会尝试自动启动 Docker Desktop，并等待 Docker CLI 与 Docker engine 就绪后再部署 Guacamole。
+
+Docker Desktop 刚安装后，即使当前终端的 `PATH` 尚未刷新，启动器也会为 Docker 子进程补充 Docker Desktop 的 `resources\bin` 路径，确保 `docker-credential-desktop.exe` 等凭据助手可被 Docker 调用。
 
 Guacamole 自动启动后，启动器会在服务器本机等待 `127.0.0.1:8088/guacamole/` 就绪。如果未能就绪，会直接打印 `docker compose ps` 以及 Guacamole / PostgreSQL 的最近日志，便于在部署服务器上定位问题。
 
