@@ -2,6 +2,13 @@
 
 All notable changes to EnvPortal are documented here.
 
+## [2.1.4] - 2026-05-01
+
+### Added
+
+- Added server-side Guacamole readiness waiting after Docker Compose startup.
+- Added automatic Docker Compose diagnostics when Guacamole is not reachable on the deployment server.
+
 ## [2.1.3] - 2026-05-01
 
 ### Fixed

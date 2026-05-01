@@ -3,7 +3,9 @@ import shlex
 import socket
 import subprocess
 import sys
+import time
 import urllib.parse
+import urllib.request
 from pathlib import Path
 
 
@@ -155,6 +157,51 @@ def check_local_tcp_port(port, label):
         return False
 
 
+def run_compose(command, args, capture=False):
+    if command["kind"] == "wsl":
+        script = f"cd {shlex.quote(wsl_path(BASE_DIR))} && docker compose {' '.join(shlex.quote(str(arg)) for arg in args)}"
+        return subprocess.run(
+            ["wsl.exe", "-e", "sh", "-lc", script],
+            cwd=BASE_DIR,
+            capture_output=capture,
+            text=True,
+            check=not capture,
+        )
+    return subprocess.run(
+        command["command"] + [str(arg) for arg in args],
+        cwd=BASE_DIR,
+        capture_output=capture,
+        text=True,
+        check=not capture,
+    )
+
+
+def wait_for_http(url, timeout_seconds=60):
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2) as response:
+                if 200 <= response.status < 500:
+                    return True
+        except Exception:
+            time.sleep(2)
+    return False
+
+
+def print_compose_diagnostics(command, compose_file):
+    print("Guacamole did not become reachable. Docker Compose diagnostics follow.")
+    for args in (
+        ["-f", compose_file, "ps"],
+        ["-f", compose_file, "logs", "--tail=80", "guacamole"],
+        ["-f", compose_file, "logs", "--tail=80", "guacamole-db"],
+    ):
+        result = run_compose(command, args, capture=True)
+        output = ((result.stdout or "") + (result.stderr or "")).strip()
+        print("")
+        print(">", " ".join(["docker", "compose"] + [str(arg) for arg in args]))
+        print(output or "(no output)")
+
+
 def start_guacamole_if_available():
     if load_env_value("GUACAMOLE_AUTO_START", "true").lower() not in ("1", "true", "yes", "on"):
         return
@@ -168,13 +215,18 @@ def start_guacamole_if_available():
     try:
         if command["kind"] == "wsl":
             print("Starting Guacamole with Docker via WSL...")
-            script = f"cd {shlex.quote(wsl_path(BASE_DIR))} && docker compose -f docker-compose.guacamole.yml up -d"
-            subprocess.run(["wsl.exe", "-e", "sh", "-lc", script], cwd=BASE_DIR, check=True)
         else:
             print("Starting Guacamole with Docker...")
             print("Docker command:", " ".join(command["command"]))
-            subprocess.run(command["command"] + ["-f", str(compose_file), "up", "-d"], cwd=BASE_DIR, check=True)
-        check_local_tcp_port(guacamole_port(), "Guacamole")
+        run_compose(command, ["-f", compose_file, "up", "-d"])
+        port = guacamole_port()
+        check_local_tcp_port(port, "Guacamole")
+        url = f"http://127.0.0.1:{port}/guacamole/"
+        print(f"Waiting for Guacamole: {url}")
+        if wait_for_http(url, env_int("GUACAMOLE_WAIT_SECONDS", 60)):
+            print(f"Guacamole is ready: {url}")
+        else:
+            print_compose_diagnostics(command, compose_file)
     except Exception as exc:
         print(f"Guacamole auto-start failed: {exc}")
 
