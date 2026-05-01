@@ -16,4 +16,4 @@ if [ -z "$PYTHON_BIN" ]; then
 fi
 
 "$PYTHON_BIN" -m pip install -r requirements.txt
-exec "$PYTHON_BIN" server.py
+exec "$PYTHON_BIN" run.py

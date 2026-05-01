@@ -8,6 +8,8 @@ All notable changes to EnvPortal are documented here.
 
 - Added Apache Guacamole QuickConnect trial integration for browser-based RDP control.
 - Added `GUACAMOLE_URL`, `GUACAMOLE_USERNAME`, and `GUACAMOLE_PASSWORD` configuration.
+- Added Docker-based Guacamole auto-start through `docker-compose.guacamole.yml` when Docker is available.
+- Added a bundled PostgreSQL initialization script for the Guacamole trial instance.
 - Added a browser remote-control button for RDP environments when Guacamole is configured.
 - Added fallback behavior that copies the Guacamole QuickConnect URI and opens Guacamole when API credentials are not configured.
 

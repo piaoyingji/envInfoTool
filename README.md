@@ -105,3 +105,20 @@ GUACAMOLE_PASSWORD=...
 - 未配置用户名/密码时，EnvPortal 会复制 `rdp://...` QuickConnect URI 并打开 Guacamole 首页，用户可粘贴到 QuickConnect 输入框。
 
 Guacamole 侧需要安装并启用 QuickConnect extension。
+
+如果本机有 Docker（包括 Windows 11 WSL / Docker Desktop 提供的 `docker` 命令），EnvPortal 可自动启动内置 Guacamole 试用实例：
+
+```env
+GUACAMOLE_AUTO_START=true
+GUACAMOLE_URL=http://localhost:8088/guacamole
+GUACAMOLE_USERNAME=guacadmin
+GUACAMOLE_PASSWORD=guacadmin
+```
+
+启动时会执行：
+
+```sh
+docker compose -f docker-compose.guacamole.yml up -d
+```
+
+如果未检测到 Docker，EnvPortal 不会报错，只是不显示浏览器远程控制能力，仍保留 RDP 文件下载和密码复制。
