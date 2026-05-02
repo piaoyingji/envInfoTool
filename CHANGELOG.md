@@ -8,6 +8,14 @@ All notable changes to OneCRM are documented here.
 
 - NewUI branch development is versioned continuously. Every stable feature or behavior batch should receive a 2.5.x patch version before commit instead of accumulating indefinitely under 2.5.0.
 
+## [2.5.8] - 2026-05-03
+
+### Changed
+
+- Raised the current application version to `2.5.8`.
+- Corrected the overview visibility rules: full-dimension statistic cards appear only in the all-customer, unfiltered view.
+- Changed the connection/VPN section to appear only in scoped views, such as a selected customer or tag-filtered range, because it describes the currently visible customer network context.
+
 ## [2.5.7] - 2026-05-03
 
 ### Changed

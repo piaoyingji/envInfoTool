@@ -73,7 +73,11 @@ export default function EnvironmentPage({ lang, organizations, allOrganizations,
       {isGlobalView && (
         <section className="global-overview">
           <DashboardStats lang={lang} customers={stats.customers} servers={stats.envs} vpns={stats.vpns} issues={stats.issues} />
-          <ConnectionSection lang={lang} organizations={allOrganizations} />
+        </section>
+      )}
+      {!isGlobalView && (
+        <section className="scoped-overview">
+          <ConnectionSection lang={lang} organizations={organizations} />
         </section>
       )}
 
