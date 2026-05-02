@@ -1,0 +1,129 @@
+services:
+  onecrm-postgres:
+    image: postgres:16-alpine
+    container_name: onecrm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: onecrm
+      POSTGRES_USER: onecrm
+      POSTGRES_PASSWORD: onecrm_pass
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - onecrm-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onecrm -d onecrm"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  onecrm-redis:
+    image: redis:7-alpine
+    container_name: onecrm-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:16379:6379"
+    volumes:
+      - onecrm-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  onecrm-minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: onecrm-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: onecrm
+      MINIO_ROOT_PASSWORD: onecrm_minio_pass
+    ports:
+      - "127.0.0.1:19000:9000"
+      - "127.0.0.1:19001:9001"
+    volumes:
+      - onecrm-minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  onecrm-hermes:
+    build:
+      context: ./hermes
+    container_name: onecrm-hermes
+    restart: unless-stopped
+    depends_on:
+      onecrm-minio:
+        condition: service_healthy
+    environment:
+      ONECRM_MINIO_ENDPOINT: onecrm-minio:9000
+      ONECRM_MINIO_ACCESS_KEY: onecrm
+      ONECRM_MINIO_SECRET_KEY: onecrm_minio_pass
+      ONECRM_MINIO_BUCKET: onecrm
+    ports:
+      - "127.0.0.1:19100:9100"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9100/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  guacd:
+    image: guacamole/guacd:1.5.5
+    container_name: onecrm-guacd
+    restart: unless-stopped
+    volumes:
+      - ./guacamole-drive:/drive
+
+  guacamole-db:
+    image: postgres:15-alpine
+    container_name: onecrm-guacamole-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: guacamole_db
+      POSTGRES_USER: guacamole_user
+      POSTGRES_PASSWORD: guacamole_pass
+    volumes:
+      - onecrm-guacamole-db:/var/lib/postgresql/data
+      - ./guacamole-init:/docker-entrypoint-initdb.d:ro
+
+  guacamole:
+    image: guacamole/guacamole:1.5.5
+    container_name: onecrm-guacamole
+    restart: unless-stopped
+    depends_on:
+      - guacd
+      - guacamole-db
+    environment:
+      GUACD_HOSTNAME: guacd
+      POSTGRESQL_HOSTNAME: guacamole-db
+      POSTGRESQL_DATABASE: guacamole_db
+      POSTGRESQL_USER: guacamole_user
+      POSTGRESQL_PASSWORD: guacamole_pass
+      QUICKCONNECT_ENABLED: "true"
+    volumes:
+      - ./guacamole-drive:/drive
+    ports:
+      - "0.0.0.0:8088:8080"
+
+  guacamole-https:
+    image: nginx:1.27-alpine
+    container_name: onecrm-guacamole-https
+    restart: unless-stopped
+    depends_on:
+      - guacamole
+    ports:
+      - "0.0.0.0:8443:443"
+    volumes:
+      - ./guacamole-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+
+volumes:
+  onecrm-postgres:
+  onecrm-redis:
+  onecrm-minio:
+  onecrm-guacamole-db:

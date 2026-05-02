@@ -1,8 +1,12 @@
 *.csv
 # .env file should also be ignored if not already
 .env
+.secrets/
 __pycache__/
 .tmp/
 certs/
 guacamole-drive/
 *.pyc
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/

@@ -1,0 +1,91 @@
+# OneCRM 2.5 Implementation Notes
+
+## Goal
+
+OneCRM 2.5 replaces the static EnvPortal UI with a React/Ant Design enterprise interface and introduces FastAPI, PostgreSQL, Redis, and MinIO as the platform foundation.
+
+## Decisions
+
+- Product name: `OneCRM`.
+- Frontend: React + Vite + TypeScript + Ant Design v5.
+- Backend: FastAPI, with legacy `.jsp` endpoints kept as adapters for one transition release.
+- Persistence: PostgreSQL is the source of truth after first startup.
+- Cache: Redis is used by the backend, not directly by the browser.
+- Object storage: MinIO is reserved for certificates, VPN/config packages, imports, and exports.
+- Auth: 2.5 keeps the single administrator model.
+
+## VPN File Ingestion
+
+The VPN guide editor supports multi-file ingestion. Users can attach several files while creating or updating a VPN guide. The backend stores source files in MinIO, rebuilds source-derived text, then triggers the VPN workflow analysis pipeline.
+
+This feature must be implemented as an asynchronous backend workflow rather than a blocking form submit. Saving the VPN guide should return quickly with a persisted record and an analysis status. File parsing, summarization, and workflow generation continue in the background.
+
+### Hermes Agent Role
+
+`Hermes Agent` is the orchestration layer for this workflow. It should decide which parser or analysis path to use for each file instead of sending every file directly to a large model.
+
+Expected tool strategy:
+
+- Text documents: use document parsers first, preserving headings, paragraphs, key-value pairs, lists, and tables.
+- Spreadsheets: extract sheet names, row/column labels, tables, and likely configuration keys.
+- Presentations: extract slide titles, notes, diagrams, and ordered instructions.
+- Email exports or copied mail templates: extract recipients, CC/BCC, subject, and formatted body where possible.
+- Images and scans: choose OCR, layout analysis, or vision-model interpretation depending on quality. Some screenshots may be better handled by vision models than by plain OCR.
+- Archives: unpack, classify internal files, parse each file independently, then merge the results.
+
+Large-model calls should be used for consolidation, deduplication, contradiction detection, missing-field inference, and final workflow structuring. They should not be the default first parser for every uploaded file.
+
+### Data Flow
+
+1. Frontend uploads one or more files with the VPN guide form. Directory uploads preserve recursive relative paths and client-side modified timestamps.
+2. Backend stores each binary in MinIO by SHA-256 under `vpn-sources/sha256/<sha256>`.
+3. Backend records `file_objects`, guide associations, and a `vpn_import_jobs` row with `mode=rebuild`.
+4. Adding files to an existing guide does not analyze only the new files. The backend reloads every source file currently associated with that guide.
+5. Hermes Agent parses each source file with the best available parser/tool path.
+6. Hermes returns `sourceRawText`, `sourceMeta`, source fragments, warnings, and a source precedence summary.
+7. Backend stores `sourceRawText`, keeps user-maintained `manualRawText`, and builds `analysisRawText = sourceRawText + manualRawText` after cleaning irrelevant customer-context duplicates.
+8. VPN workflow analysis runs against `analysisRawText` and updates the guide with ordered steps, mail templates, automatic tags, and analysis status.
+
+### Source Text Fields
+
+- `sourceRawText`: derived from the current full source-file set. It is rebuilt by Hermes and must not be manually edited.
+- `manualRawText`: user-maintained supplemental text. It survives source rebuilds.
+- `analysisRawText`: cleaned final input for AI workflow analysis. It is also exposed through the compatibility `rawText` field.
+- Original files are immutable source archives. Cleaning and AI preparation only affect derived text.
+
+### Source Precedence
+
+Hermes includes filename, folder path, relative path, client modified time, upload time, path context, date hints, and source role in its output. Path and content hints such as `20260501以降`, `新サーバ`, `旧`, `追加`, `補足`, `差分`, and `変更` are treated as meaningful source context.
+
+The AI workflow prompt uses source precedence to prefer current/override/supplement sources over historical material. When remote access requires a jump host, bastion, gateway, proxy, relay, `踏み台`, `経由`, or `中継`, the workflow must be split into ordered connection steps and keep credentials attached to the matching host or hop.
+
+### UX Requirements
+
+- File parsing and AI workflow analysis must not block the save action.
+- While parsing/analyzing, the guide is shown as read-only with a clear status overlay.
+- Users can inspect the generated raw text and manually adjust it after analysis completes.
+- If parsing fails, the system keeps uploaded objects and partial text where possible, and exposes a retry path.
+- Generated mail steps must render as mail-specific UI, not plain text blocks.
+
+## Migration
+
+On startup, the backend initializes tables and checks whether organizations or environments already exist. If not, it imports the legacy files:
+
+- `data.csv` becomes organizations and environments.
+- `tags.json` becomes tags and environment tag joins.
+- `rdp.csv` becomes remote connection records.
+
+Before importing, the original files are copied to `.tmp/migration-backup/`.
+
+## Rollback
+
+The legacy CSV/JSON files are retained. To roll back, stop OneCRM, switch back to the previous branch/version, and start the old server. PostgreSQL data can be left in place; the previous version will ignore it.
+
+## Verification Checklist
+
+- `npm run build` in `frontend/`.
+- Python imports `onecrm.app` successfully.
+- `docker compose config` passes.
+- First startup creates PostgreSQL tables and imports the sample CSV/JSON data once.
+- `/api/organizations` returns organizations, environments, manual tags, and automatic DB tags.
+- `/api/env-check`, `/api/db-probe`, `/api/rdp/file`, `/api/guacamole/connect`, and `/rdp_signing_cert.cer` remain callable.

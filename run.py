@@ -258,6 +258,14 @@ def guacamole_backend_port():
     return 8088
 
 
+def hermes_port():
+    value = load_env_value("ONECRM_HERMES_URL", "http://127.0.0.1:19100")
+    parsed = urllib.parse.urlparse(value)
+    if parsed.hostname in ("127.0.0.1", "localhost") and parsed.port:
+        return parsed.port
+    return 0
+
+
 def local_lan_ips():
     values = []
     try:
@@ -475,6 +483,14 @@ def run_compose(command, args, capture=False):
     )
 
 
+def run_docker_raw(command, args, capture=False):
+    if command["kind"] == "wsl":
+        script = " ".join(["docker"] + [shlex.quote(str(arg)) for arg in args])
+        return subprocess.run(["wsl.exe", "-e", "sh", "-lc", script], cwd=BASE_DIR, capture_output=capture, text=True, check=not capture)
+    docker_exe = command["command"][0]
+    return subprocess.run([docker_exe] + [str(arg) for arg in args], cwd=BASE_DIR, capture_output=capture, text=True, env=docker_subprocess_env(command), check=not capture)
+
+
 def wait_for_http(url, timeout_seconds=60):
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
@@ -488,9 +504,10 @@ def wait_for_http(url, timeout_seconds=60):
 
 
 def print_compose_diagnostics(command, compose_file):
-    print("Guacamole did not become reachable. Docker Compose diagnostics follow.")
+    print("OneCRM Docker services did not become fully reachable. Docker Compose diagnostics follow.")
     for args in (
         ["-f", compose_file, "ps"],
+        ["-f", compose_file, "logs", "--tail=80", "onecrm-hermes"],
         ["-f", compose_file, "logs", "--tail=80", "guacamole"],
         ["-f", compose_file, "logs", "--tail=80", "guacamole-db"],
     ):
@@ -545,17 +562,21 @@ def reset_guacamole_volume_if_bad_schema(command, compose_file):
         print("Guacamole database schema could not be verified yet.")
         return
 
-    print("Guacamole database schema is incompatible. Recreating EnvPortal Guacamole volume...")
-    run_compose(command, ["-f", compose_file, "down", "-v"])
-    run_compose(command, ["-f", compose_file, "up", "-d"])
+    print("Guacamole database schema is incompatible. Recreating only the Guacamole database container and volume...")
+    run_compose(command, ["-f", compose_file, "stop", "guacamole", "guacamole-db"])
+    run_compose(command, ["-f", compose_file, "rm", "-f", "guacamole", "guacamole-db"])
+    run_docker_raw(command, ["volume", "rm", "envportal_onecrm-guacamole-db"], capture=True)
+    run_docker_raw(command, ["volume", "rm", "onecrm-guacamole-db"], capture=True)
+    run_compose(command, ["-f", compose_file, "up", "-d", "guacamole-db", "guacamole"])
     state = guacamole_schema_state(command, compose_file)
     print(f"Guacamole database schema after reset: {state}")
 
 
-def start_guacamole_if_available():
-    if load_env_value("GUACAMOLE_AUTO_START", "true").lower() not in ("1", "true", "yes", "on"):
+def start_docker_services_if_available():
+    docker_auto_start = load_env_value("ONECRM_DOCKER_AUTO_START", load_env_value("GUACAMOLE_AUTO_START", "true"))
+    if docker_auto_start.lower() not in ("1", "true", "yes", "on"):
         return
-    compose_file = BASE_DIR / "docker-compose.guacamole.yml"
+    compose_file = BASE_DIR / "docker-compose.yml"
     if not compose_file.exists():
         return
     ensure_guacamole_https_cert()
@@ -565,7 +586,7 @@ def start_guacamole_if_available():
             print("Waiting for Docker Desktop to expose the Docker CLI...")
             command = wait_for_docker_command(env_int("DOCKER_WAIT_SECONDS", 120))
         if not command:
-            print("Docker was not found in PATH, Docker Desktop, or WSL. Guacamole integration is disabled.")
+            print("Docker was not found in PATH, Docker Desktop, or WSL. PostgreSQL/Redis/MinIO/Guacamole auto-start is disabled.")
             offer_docker_desktop_install()
             return
     if not docker_engine_ready(command):
@@ -577,12 +598,18 @@ def start_guacamole_if_available():
         return
     try:
         if command["kind"] == "wsl":
-            print("Starting Guacamole with Docker via WSL...")
+            print("Starting OneCRM Docker services via WSL...")
         else:
-            print("Starting Guacamole with Docker...")
+            print("Starting OneCRM Docker services...")
             print("Docker command:", " ".join(command["command"]))
         run_compose(command, ["-f", compose_file, "up", "-d"])
         reset_guacamole_volume_if_bad_schema(command, compose_file)
+        check_local_tcp_port(env_int("ONECRM_POSTGRES_PORT", 15432), "PostgreSQL")
+        check_local_tcp_port(env_int("ONECRM_REDIS_PORT", 16379), "Redis")
+        check_local_tcp_port(env_int("ONECRM_MINIO_PORT", 19000), "MinIO")
+        hermes_local_port = hermes_port()
+        if hermes_local_port:
+            check_local_tcp_port(hermes_local_port, "Hermes")
         port = guacamole_port()
         check_local_tcp_port(port, "Guacamole")
         url = f"http://127.0.0.1:{port}/guacamole/"
@@ -592,7 +619,33 @@ def start_guacamole_if_available():
         else:
             print_compose_diagnostics(command, compose_file)
     except Exception as exc:
-        print(f"Guacamole auto-start failed: {exc}")
+        print(f"OneCRM Docker auto-start failed: {exc}")
+
+
+def command_available_silent(command):
+    try:
+        subprocess.run([command, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        return True
+    except Exception:
+        return False
+
+
+def ensure_frontend_build():
+    frontend = BASE_DIR / "frontend"
+    package_json = frontend / "package.json"
+    dist_index = frontend / "dist" / "index.html"
+    if not package_json.exists():
+        return
+    if dist_index.exists() and load_env_value("ONECRM_FRONTEND_BUILD", "auto").lower() == "skip":
+        return
+    if not command_available_silent("npm"):
+        print("Node.js/npm was not found. The React frontend cannot be built automatically.")
+        print("Install Node.js LTS, then run start.bat again, or run npm install && npm run build in frontend/.")
+        return
+    node_modules = frontend / "node_modules"
+    if not node_modules.exists():
+        subprocess.check_call(["npm", "install"], cwd=frontend)
+    subprocess.check_call(["npm", "run", "build"], cwd=frontend)
 
 
 def install_requirements():
@@ -606,7 +659,8 @@ def main():
     os.chdir(BASE_DIR)
     install_requirements()
     ensure_windows_firewall_ports([env_int("PORT", 8080), guacamole_port(), guacamole_backend_port()])
-    start_guacamole_if_available()
+    start_docker_services_if_available()
+    ensure_frontend_build()
     import server
     server.main()
 

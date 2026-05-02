@@ -1,0 +1,31 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OneCRM logo">
+  <defs>
+    <radialGradient id="navy" cx="32%" cy="28%" r="72%">
+      <stop offset="0%" stop-color="#0b315b"/>
+      <stop offset="58%" stop-color="#06244a"/>
+      <stop offset="100%" stop-color="#021936"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="24" y1="24" x2="102" y2="104">
+      <stop offset="0%" stop-color="#ffe49a"/>
+      <stop offset="42%" stop-color="#f3c65e"/>
+      <stop offset="100%" stop-color="#c4861c"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#00091a" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+  <circle cx="64" cy="64" r="54" fill="url(#navy)" filter="url(#softShadow)"/>
+  <path
+    d="M64 28
+       A36 36 0 1 0 64 100
+       A36 36 0 0 0 100 64
+       L82 64
+       A18 18 0 1 1 64 46
+       A18 18 0 0 1 82 64
+       L100 64
+       A36 36 0 0 0 64 28Z"
+    fill="url(#gold)"
+  />
+  <circle cx="64" cy="64" r="18" fill="#fff"/>
+  <rect x="82" y="58" width="30" height="12" rx="1" fill="#fff"/>
+</svg>
