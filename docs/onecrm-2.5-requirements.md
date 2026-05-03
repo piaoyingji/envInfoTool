@@ -83,6 +83,18 @@ The product name is `OneCRM`. The legacy `EnvPortal` name is kept only in migrat
 
 ## Current 2.5 Improvement Backlog
 
+## User Authentication and Permissions
+
+2.5.9 introduces local OneCRM accounts stored in PostgreSQL. The system creates the first `Admin` account from `AUTH_PASSWORD` when no users exist. Passwords must be PBKDF2 hashes; reset tokens and session tokens are stored only as hashes.
+
+- Roles are fixed to `Admins` and `Users`.
+- Admins can maintain all users and all business data.
+- Users can read, copy, download, and connect, but cannot modify business records.
+- Users can update their own password and avatar.
+- Login, logout, forgot-password, reset-password, profile, and user maintenance must follow the OneCRM visual language.
+- System functions are exposed from the top-bar gear menu, not the CRM business navigation.
+- Password reset mail is sent by SMTP configured through `ONECRM_SMTP_*`; the virtual mail viewer at `http://192.168.20.38:5000/` is used for testing.
+
 - Finish UI/UX design-language consolidation: token system, navigation cleanup, compact header, consistent tags, responsive breakpoints.
 - Split the large environment page into smaller feature components without changing behavior.
 - Keep README focused on deployment/usage and move deeper product/technical rationale into docs.

@@ -7,6 +7,7 @@ import re
 import threading
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -18,13 +19,84 @@ import legacy_server as legacy
 
 from . import __version__
 from .ai import summarize_vpn_workflow_with_ai
+from .auth import ROLE_ADMINS, ROLE_USERS, SESSION_COOKIE, authenticate, change_own_password, create_password_reset, create_session, create_user, delete_session, get_user, list_users, reset_password_by_token, reset_user_password, set_user_disabled, update_avatar, update_own_profile, update_user, user_from_session
 from .cache import get_json, set_json
 from .db import all_tags, attach_file_to_vpn_guide, audit, create_environment, create_vpn_import_job, delete_environment, file_objects_by_ids, get_organization, get_vpn_guide, get_vpn_import_job, init_db, organizations_with_environments, save_file_object, save_vpn_guide_raw, summarize_vpn_workflow, update_app_servers, update_environment_details, update_environment_vpn, update_vpn_guide_file_metadata, update_vpn_guide_workflow, update_vpn_import_job, vpn_guide_source_files
-from .settings import APP_NAME, BASE_DIR, HERMES_TIMEOUT_SECONDS, HERMES_URL, MINIO_BUCKET, UPLOAD_MAX_FILE_MB, UPLOAD_MAX_JOB_MB, UPLOAD_REJECT_EXTENSIONS, VERSION
+from .mail import send_password_reset_mail
+from .settings import APP_NAME, BASE_DIR, HERMES_TIMEOUT_SECONDS, HERMES_URL, MINIO_BUCKET, PUBLIC_URL, UPLOAD_MAX_FILE_MB, UPLOAD_MAX_JOB_MB, UPLOAD_REJECT_EXTENSIONS, VERSION
 from .storage import ensure_bucket, get_object_bytes, put_bytes_if_missing
 
 
 app = FastAPI(title=APP_NAME, version=VERSION)
+
+
+PUBLIC_API_PATHS = {
+    "/api/config",
+    "/api/auth/me",
+    "/api/auth/login",
+    "/api/auth/logout",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
+}
+
+WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+READ_ALLOWED_POSTS = {
+    "/api/rdp/file",
+    "/api/rdp/connect",
+    "/api/guacamole/connect",
+}
+SELF_SERVICE_WRITE_PATHS = {
+    "/api/auth/me/password",
+    "/api/auth/me/profile",
+    "/api/auth/me/avatar",
+}
+
+
+def current_user(request: Request) -> dict[str, Any] | None:
+    cached = getattr(request.state, "user", None)
+    if cached is not None:
+        return cached
+    user = user_from_session(request.cookies.get(SESSION_COOKIE))
+    request.state.user = user
+    return user
+
+
+def require_auth(request: Request) -> dict[str, Any]:
+    user = current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return user
+
+
+def require_admin(request: Request) -> dict[str, Any]:
+    user = require_auth(request)
+    if user.get("role") != ROLE_ADMINS:
+        raise HTTPException(status_code=403, detail="Admin role is required")
+    return user
+
+
+def require_write_access(request: Request) -> dict[str, Any]:
+    user = require_auth(request)
+    if user.get("role") != ROLE_ADMINS:
+        raise HTTPException(status_code=403, detail="Read-only users cannot modify data")
+    return user
+
+
+def audit_as(request: Request, action: str, target_type: str, target_id: Any | None = None, payload: dict[str, Any] | None = None) -> None:
+    user = current_user(request)
+    actor = str((user or {}).get("username") or "system")
+    audit(action, target_type, target_id, payload=payload or {}, actor=actor)
+
+
+@app.middleware("http")
+async def auth_gate(request: Request, call_next):
+    if request.url.path.startswith("/api/") and request.url.path not in PUBLIC_API_PATHS and not request.url.path.startswith("/api/auth/avatar/"):
+        user = current_user(request)
+        if not user:
+            return JSONResponse({"detail": "Authentication required"}, status_code=401)
+        if request.method in WRITE_METHODS and request.url.path not in READ_ALLOWED_POSTS and request.url.path not in SELF_SERVICE_WRITE_PATHS and user.get("role") != ROLE_ADMINS:
+            return JSONResponse({"detail": "Read-only users cannot modify data"}, status_code=403)
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -60,6 +132,151 @@ def api_config(request: Request) -> dict[str, Any]:
         "guacamoleUrl": "/guacamole_auto_login.jsp" if legacy.GUACAMOLE_USERNAME and legacy.GUACAMOLE_PASSWORD else legacy.public_guacamole_url(request.headers.get("host", "")),
         "guacamoleAutoLogin": bool(legacy.GUACAMOLE_URL and legacy.GUACAMOLE_USERNAME and legacy.GUACAMOLE_PASSWORD),
     }
+
+
+@app.get("/api/auth/me")
+def api_auth_me(request: Request) -> dict[str, Any]:
+    user = current_user(request)
+    return {"authenticated": bool(user), "user": user}
+
+
+@app.post("/api/auth/login")
+async def api_auth_login(request: Request) -> JSONResponse:
+    payload = await request.json()
+    user = authenticate(str(payload.get("username") or ""), str(payload.get("password") or ""))
+    if not user:
+        return JSONResponse({"detail": "Invalid username or password"}, status_code=401)
+    token = create_session(user["id"])
+    response = JSONResponse({"user": user})
+    response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=7 * 24 * 3600, path="/")
+    return response
+
+
+@app.post("/api/auth/logout")
+def api_auth_logout(request: Request) -> JSONResponse:
+    delete_session(request.cookies.get(SESSION_COOKIE))
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return response
+
+
+@app.post("/api/auth/forgot-password")
+async def api_auth_forgot_password(request: Request) -> dict[str, Any]:
+    payload = await request.json()
+    user, token = create_password_reset(str(payload.get("usernameOrEmail") or ""))
+    if user and token and user.get("email"):
+        reset_url = f"{PUBLIC_URL.rstrip('/')}/index.html?resetToken={urllib.parse.quote(token)}"
+        send_password_reset_mail(user["email"], user["username"], reset_url)
+    return {"ok": True}
+
+
+@app.post("/api/auth/reset-password")
+async def api_auth_reset_password(request: Request) -> dict[str, Any]:
+    payload = await request.json()
+    try:
+        user = reset_password_by_token(str(payload.get("token") or ""), str(payload.get("newPassword") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "user": user}
+
+
+@app.patch("/api/auth/me/password")
+async def api_auth_change_password(request: Request) -> dict[str, Any]:
+    user = require_auth(request)
+    payload = await request.json()
+    try:
+        change_own_password(user["id"], str(payload.get("currentPassword") or ""), str(payload.get("newPassword") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    delete_session(request.cookies.get(SESSION_COOKIE))
+    return {"ok": True}
+
+
+@app.patch("/api/auth/me/profile")
+async def api_auth_profile(request: Request) -> dict[str, Any]:
+    user = require_auth(request)
+    payload = await request.json()
+    return update_own_profile(user["id"], payload)
+
+
+@app.post("/api/auth/me/avatar")
+async def api_auth_avatar(request: Request, avatar: UploadFile = File(...)) -> dict[str, Any]:
+    user = require_auth(request)
+    payload = await avatar.read()
+    if len(payload) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Avatar is larger than 2MB")
+    digest = hashlib.sha256(payload).hexdigest()
+    content_type = avatar.content_type or mimetypes.guess_type(avatar.filename or "")[0] or "application/octet-stream"
+    object_key = f"avatars/{user['id']}/{digest}"
+    put_bytes_if_missing(object_key, payload, content_type=content_type, metadata={"category": "avatar"})
+    return update_avatar(user["id"], object_key)
+
+
+@app.get("/api/auth/avatar/{user_id}")
+def api_auth_avatar_get(user_id: str) -> Response:
+    user = get_user(user_id)
+    if not user or not user.get("avatarObjectKey"):
+        raise HTTPException(status_code=404, detail="Avatar not found")
+    payload = get_object_bytes(user["avatarObjectKey"])
+    return Response(payload, media_type=mimetypes.guess_type(user["avatarObjectKey"])[0] or "application/octet-stream")
+
+
+@app.get("/api/users")
+def api_users(request: Request) -> dict[str, Any]:
+    require_admin(request)
+    return {"users": list_users()}
+
+
+@app.post("/api/users")
+async def api_create_user(request: Request) -> dict[str, Any]:
+    require_admin(request)
+    payload = await request.json()
+    try:
+        user = create_user(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    audit_as(request, "create_user", "user", user["id"], {"username": user["username"], "role": user["role"]})
+    return user
+
+
+@app.patch("/api/users/{user_id}")
+async def api_update_user(user_id: str, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    payload = await request.json()
+    try:
+        user = update_user(user_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    audit_as(request, "update_user", "user", user_id, {"username": user["username"], "role": user["role"]})
+    return user
+
+
+@app.post("/api/users/{user_id}/reset-password")
+async def api_reset_user_password(user_id: str, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    payload = await request.json()
+    try:
+        user = reset_user_password(user_id, str(payload.get("password") or "") or None)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    audit_as(request, "reset_user_password", "user", user_id, {"username": user["username"]})
+    return user
+
+
+@app.post("/api/users/{user_id}/disable")
+def api_disable_user(user_id: str, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    user = set_user_disabled(user_id, True)
+    audit_as(request, "disable_user", "user", user_id, {"username": user["username"]})
+    return user
+
+
+@app.post("/api/users/{user_id}/enable")
+def api_enable_user(user_id: str, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    user = set_user_disabled(user_id, False)
+    audit_as(request, "enable_user", "user", user_id, {"username": user["username"]})
+    return user
 
 
 @app.get("/api/organizations")
@@ -107,27 +324,30 @@ async def api_create_environment(organization_id: str, request: Request) -> dict
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    audit("create_environment", "organization", organization_id, payload={"environment_id": result["id"], "title": result["title"]})
+    audit_as(request, "create_environment", "organization", organization_id, payload={"environment_id": result["id"], "title": result["title"]})
     return result
 
 
 @app.delete("/api/environments/{environment_id}")
 async def api_delete_environment(environment_id: str) -> dict[str, Any]:
-    return delete_environment_response(environment_id)
+    return delete_environment_response(environment_id, request)
 
 
 @app.post("/api/environments/{environment_id}/delete")
 async def api_post_delete_environment(environment_id: str) -> dict[str, Any]:
-    return delete_environment_response(environment_id)
+    return delete_environment_response(environment_id, request)
 
 
-def delete_environment_response(environment_id: str) -> dict[str, Any]:
+def delete_environment_response(environment_id: str, request: Request | None = None) -> dict[str, Any]:
     try:
         result = delete_environment(environment_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     try:
-        audit("delete_environment", "environment", environment_id, payload={"title": result["title"], "organization_id": result["organization_id"], "deleted": result.get("deleted", {})})
+        if request:
+            audit_as(request, "delete_environment", "environment", environment_id, payload={"title": result["title"], "organization_id": result["organization_id"], "deleted": result.get("deleted", {})})
+        else:
+            audit("delete_environment", "environment", environment_id, payload={"title": result["title"], "organization_id": result["organization_id"], "deleted": result.get("deleted", {})})
     except Exception as exc:
         print(f"delete audit failed for environment {environment_id}: {exc}")
     return {"ok": True, "id": environment_id, "deleted": result.get("deleted", {})}
@@ -554,7 +774,7 @@ async def api_update_environment_vpn(environment_id: str, request: Request) -> d
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    audit("update_environment_vpn", "environment", environment_id, payload=result)
+    audit_as(request, "update_environment_vpn", "environment", environment_id, payload=result)
     return result
 
 
@@ -565,7 +785,7 @@ async def api_update_environment_details(environment_id: str, request: Request) 
         result = update_environment_details(environment_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    audit("update_environment_details", "environment", environment_id, payload=strip_secret(payload))
+    audit_as(request, "update_environment_details", "environment", environment_id, payload=strip_secret(payload))
     return result
 
 
@@ -576,7 +796,7 @@ async def api_update_app_servers(environment_id: str, request: Request) -> dict[
         servers = update_app_servers(environment_id, list(payload.get("servers") or []))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    audit("update_app_servers", "environment", environment_id, payload={"count": len(servers)})
+    audit_as(request, "update_app_servers", "environment", environment_id, payload={"count": len(servers)})
     return {"servers": servers}
 
 
@@ -596,7 +816,7 @@ async def api_db_probe(request: Request) -> dict[str, Any]:
     payload = await request.json()
     db_name = payload.get("dbName") or build_db_name(payload)
     result = legacy.probe_database(db_name, payload.get("dbUser", ""), payload.get("dbPwd", ""))
-    audit("probe", "database", payload=strip_secret(payload) | {"result": result})
+    audit_as(request, "probe", "database", payload=strip_secret(payload) | {"result": result})
     return result
 
 
@@ -626,7 +846,7 @@ async def api_rdp_file(request: Request) -> Response:
     legacy.save_rdp_credential(target, str(form.get("user", "")), str(form.get("password", "")))
     payload = legacy.build_rdp_file(target, str(form.get("user", "")), str(form.get("password", "")))
     payload = legacy.sign_rdp_payload(payload, filename_base)
-    audit("download_rdp", "remote", payload={"target": target, "org": org, "env": env})
+    audit_as(request, "download_rdp", "remote", payload={"target": target, "org": org, "env": env})
     return Response(
         payload,
         media_type="application/x-rdp",
@@ -642,7 +862,7 @@ async def api_rdp_connect(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "message": "Missing RDP target"}, status_code=400)
     legacy.save_rdp_credential(target, str(form.get("user", "")), str(form.get("password", "")))
     ok, message = legacy.launch_mstsc(target)
-    audit("connect_rdp", "remote", payload={"target": target, "ok": ok})
+    audit_as(request, "connect_rdp", "remote", payload={"target": target, "ok": ok})
     return JSONResponse({"ok": ok, "message": message}, status_code=200 if ok else 500)
 
 
@@ -658,7 +878,7 @@ async def api_guacamole_connect(request: Request) -> JSONResponse:
         str(form.get("password", "")),
         legacy.public_guacamole_url(request.headers.get("host", "")),
     )
-    audit("connect_guacamole", "remote", payload={"target": target, "ok": result.get("ok")})
+    audit_as(request, "connect_guacamole", "remote", payload={"target": target, "ok": result.get("ok")})
     return JSONResponse(result, status_code=200 if result.get("ok") else 500)
 
 
@@ -726,6 +946,7 @@ async def legacy_guacamole_connect(request: Request) -> JSONResponse:
 @app.post("/update_rdp.jsp")
 @app.post("/update_tags.jsp")
 async def legacy_file_update(request: Request) -> Response:
+    require_write_access(request)
     path_map = {
         "/update_csv.jsp": "data.csv",
         "/update_rdp.jsp": "rdp.csv",
@@ -736,7 +957,7 @@ async def legacy_file_update(request: Request) -> Response:
     if not filename:
         return Response("Not Found", status_code=404)
     (BASE_DIR / filename).write_bytes(body)
-    audit("legacy_file_update", "file", payload={"file": filename})
+    audit_as(request, "legacy_file_update", "file", payload={"file": filename})
     return Response("success")
 
 

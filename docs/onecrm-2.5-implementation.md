@@ -12,7 +12,16 @@ OneCRM 2.5 replaces the static EnvPortal UI with a React/Ant Design enterprise i
 - Persistence: PostgreSQL is the source of truth after first startup.
 - Cache: Redis is used by the backend, not directly by the browser.
 - Object storage: MinIO is reserved for certificates, VPN/config packages, imports, and exports.
-- Auth: 2.5 keeps the single administrator model.
+- Auth: 2.5.9 replaces the single administrator password with PostgreSQL-backed local users. If no user exists on startup, `Admin` is created from `AUTH_PASSWORD`.
+
+## Authentication and Authorization
+
+- User data is stored in `users`; sessions are stored in `user_sessions`; password reset links use `password_reset_tokens`.
+- Passwords are saved as PBKDF2 hashes with per-password salt. Session and reset tokens are stored as SHA-256 hashes.
+- `Admins` can write business data and maintain users. `Users` can read, copy, download, and connect, but write APIs return `403`.
+- The top-bar gear menu is the system-function entry point for user management, profile, password change, and logout.
+- Avatars are stored in MinIO and referenced by object key in PostgreSQL.
+- Forgot-password sends an SMTP reset link built from `ONECRM_PUBLIC_URL`; `http://192.168.20.38:5000/` can be used to inspect test mails.
 
 ## VPN File Ingestion
 

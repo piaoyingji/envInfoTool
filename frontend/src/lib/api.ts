@@ -1,9 +1,112 @@
-import type { AppServer, Environment, HealthResult, PortalConfig, PortalData, VpnGuide, VpnImportJob } from './types';
+import type { AppServer, AuthState, CurrentUser, Environment, HealthResult, PortalConfig, PortalData, VpnGuide, VpnImportJob } from './types';
+
+async function readJson<T>(response: Response, fallback: string): Promise<T> {
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result?.detail || result?.message || fallback);
+  return result as T;
+}
 
 export async function fetchPortalData(): Promise<PortalData> {
   const response = await fetch('/api/organizations');
-  if (!response.ok) throw new Error('Failed to load organizations');
-  return response.json();
+  return readJson(response, 'Failed to load organizations');
+}
+
+export async function fetchMe(): Promise<AuthState> {
+  const response = await fetch('/api/auth/me');
+  return readJson(response, 'Failed to load current user');
+}
+
+export async function login(username: string, password: string): Promise<{ user: CurrentUser }> {
+  const response = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  });
+  return readJson(response, 'Login failed');
+}
+
+export async function logout(): Promise<void> {
+  await fetch('/api/auth/logout', { method: 'POST' });
+}
+
+export async function forgotPassword(usernameOrEmail: string): Promise<void> {
+  const response = await fetch('/api/auth/forgot-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ usernameOrEmail })
+  });
+  await readJson(response, 'Failed to send reset mail');
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  const response = await fetch('/api/auth/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, newPassword })
+  });
+  await readJson(response, 'Failed to reset password');
+}
+
+export async function changeOwnPassword(currentPassword: string, newPassword: string): Promise<void> {
+  const response = await fetch('/api/auth/me/password', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword })
+  });
+  await readJson(response, 'Failed to change password');
+}
+
+export async function updateOwnProfile(values: { displayName: string; email: string }): Promise<CurrentUser> {
+  const response = await fetch('/api/auth/me/profile', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(values)
+  });
+  return readJson(response, 'Failed to update profile');
+}
+
+export async function uploadOwnAvatar(file: File): Promise<CurrentUser> {
+  const form = new FormData();
+  form.append('avatar', file);
+  const response = await fetch('/api/auth/me/avatar', { method: 'POST', body: form });
+  return readJson(response, 'Failed to upload avatar');
+}
+
+export async function fetchUsers(): Promise<{ users: CurrentUser[] }> {
+  const response = await fetch('/api/users');
+  return readJson(response, 'Failed to load users');
+}
+
+export async function createUser(values: Record<string, unknown>): Promise<CurrentUser & { temporaryPassword?: string }> {
+  const response = await fetch('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(values)
+  });
+  return readJson(response, 'Failed to create user');
+}
+
+export async function updateUser(userId: string, values: Record<string, unknown>): Promise<CurrentUser> {
+  const response = await fetch(`/api/users/${encodeURIComponent(userId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(values)
+  });
+  return readJson(response, 'Failed to update user');
+}
+
+export async function resetUserPassword(userId: string, password?: string): Promise<CurrentUser & { temporaryPassword?: string }> {
+  const response = await fetch(`/api/users/${encodeURIComponent(userId)}/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password })
+  });
+  return readJson(response, 'Failed to reset password');
+}
+
+export async function setUserEnabled(userId: string, enabled: boolean): Promise<CurrentUser> {
+  const response = await fetch(`/api/users/${encodeURIComponent(userId)}/${enabled ? 'enable' : 'disable'}`, { method: 'POST' });
+  return readJson(response, 'Failed to update user status');
 }
 
 export async function fetchPortalConfig(): Promise<PortalConfig> {

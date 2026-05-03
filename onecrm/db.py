@@ -125,6 +125,35 @@ def init_db() -> None:
                     payload jsonb not null default '{}'::jsonb,
                     created_at timestamptz not null default now()
                 );
+                create table if not exists users (
+                    id uuid primary key,
+                    username text not null unique,
+                    role text not null default 'Users',
+                    email text not null default '',
+                    display_name text not null default '',
+                    avatar_object_key text not null default '',
+                    password_hash text not null,
+                    password_changed_at timestamptz,
+                    disabled boolean not null default false,
+                    created_at timestamptz not null default now(),
+                    updated_at timestamptz not null default now()
+                );
+                create table if not exists user_sessions (
+                    id uuid primary key,
+                    user_id uuid not null references users(id) on delete cascade,
+                    token_hash text not null unique,
+                    expires_at timestamptz not null,
+                    created_at timestamptz not null default now(),
+                    last_seen_at timestamptz not null default now()
+                );
+                create table if not exists password_reset_tokens (
+                    id uuid primary key,
+                    user_id uuid not null references users(id) on delete cascade,
+                    token_hash text not null unique,
+                    expires_at timestamptz not null,
+                    used_at timestamptz,
+                    created_at timestamptz not null default now()
+                );
                 create table if not exists files (
                     id uuid primary key,
                     object_key text not null,
@@ -210,7 +239,13 @@ def init_db() -> None:
             cur.execute("alter table app_servers add column if not exists details jsonb not null default '[]'::jsonb")
             cur.execute("alter table app_servers add column if not exists order_index integer not null default 0")
             cur.execute("alter table app_servers alter column type set default ''")
+            cur.execute("alter table users add column if not exists avatar_object_key text not null default ''")
+            cur.execute("alter table users add column if not exists disabled boolean not null default false")
+            cur.execute("create index if not exists idx_user_sessions_token_hash on user_sessions(token_hash)")
+            cur.execute("create index if not exists idx_password_reset_tokens_token_hash on password_reset_tokens(token_hash)")
         conn.commit()
+    from .auth import ensure_admin_user
+    ensure_admin_user()
     migrate_legacy_files()
     refresh_vpn_derived_tags()
 
@@ -1338,12 +1373,12 @@ def all_tags() -> list[dict[str, str]]:
             return [dict(row) for row in cur.fetchall()]
 
 
-def audit(action: str, target_type: str, target_id: Any | None = None, payload: dict[str, Any] | None = None) -> None:
+def audit(action: str, target_type: str, target_id: Any | None = None, payload: dict[str, Any] | None = None, actor: str = "admin") -> None:
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "insert into audit_logs(id, action, target_type, target_id, payload) values(%s,%s,%s,%s,%s)",
-                (uuid.uuid4(), action, target_type, target_id, Jsonb(json_safe(payload or {}))),
+                "insert into audit_logs(id, actor, action, target_type, target_id, payload) values(%s,%s,%s,%s,%s,%s)",
+                (uuid.uuid4(), actor, action, target_type, target_id, Jsonb(json_safe(payload or {}))),
             )
         conn.commit()
 

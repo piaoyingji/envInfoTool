@@ -152,3 +152,20 @@ export type HealthResult = {
   ttlGuess?: string;
   serverStack?: string;
 };
+
+export type UserRole = 'Admins' | 'Users';
+
+export type CurrentUser = {
+  id: string;
+  username: string;
+  role: UserRole;
+  email: string;
+  displayName: string;
+  avatarUrl?: string;
+  disabled?: boolean;
+};
+
+export type AuthState = {
+  authenticated: boolean;
+  user?: CurrentUser | null;
+};

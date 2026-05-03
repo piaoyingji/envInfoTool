@@ -8,6 +8,21 @@ All notable changes to OneCRM are documented here.
 
 - NewUI branch development is versioned continuously. Every stable feature or behavior batch should receive a 2.5.x patch version before commit instead of accumulating indefinitely under 2.5.0.
 
+## [2.5.9] - 2026-05-04
+
+### Added
+
+- Added PostgreSQL-backed local users with `Admins` and `Users` roles.
+- Added PBKDF2 password hashing, server-side sessions, password reset tokens, and first-start `Admin` migration from `AUTH_PASSWORD`.
+- Added OneCRM-styled login, forgot-password, reset-password, profile, avatar, logout, and top-bar system menu surfaces.
+- Added Admin-only user maintenance APIs and UI for creating users, editing profile fields, resetting passwords, and enabling/disabling accounts.
+- Added SMTP password reset mail configuration and documented testing with the virtual mail viewer at `http://192.168.20.38:5000/`.
+
+### Changed
+
+- Raised the current application version to `2.5.9`.
+- Protected business write APIs so `Users` can read, copy, download, and connect, but cannot modify customer environment data.
+
 ## [2.5.8] - 2026-05-03
 
 ### Changed

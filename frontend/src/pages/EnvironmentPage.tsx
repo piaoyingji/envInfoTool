@@ -19,6 +19,7 @@ type Props = {
   selectedTags: string[];
   setSelectedTags: (tags: string[]) => void;
   isGlobalView: boolean;
+  canWrite: boolean;
 };
 
 type EnvironmentDraft = {
@@ -36,7 +37,7 @@ type EnvironmentDraft = {
   db_password: string;
 };
 
-export default function EnvironmentPage({ lang, organizations, allOrganizations, tags, selectedTags, setSelectedTags, isGlobalView }: Props) {
+export default function EnvironmentPage({ lang, organizations, allOrganizations, tags, selectedTags, setSelectedTags, isGlobalView, canWrite }: Props) {
   const queryClient = useQueryClient();
   const stats = useMemo(() => {
     const envs = allOrganizations.flatMap((org) => org.environments);
@@ -89,22 +90,23 @@ export default function EnvironmentPage({ lang, organizations, allOrganizations,
                 <h2>{org.name}</h2>
                 <span className="org-code">{org.code}</span>
               </div>
-              <AddEnvironmentButton
+              {canWrite && <AddEnvironmentButton
                 lang={lang}
                 org={org}
                 onCreated={async () => {
                   await queryClient.invalidateQueries({ queryKey: ['portal-data'] });
                   await queryClient.refetchQueries({ queryKey: ['portal-data'] });
                 }}
-              />
+              />}
             </div>
             <OrgVpnGuide
               lang={lang}
               org={org}
+              canWrite={canWrite}
               onSaved={() => queryClient.invalidateQueries({ queryKey: ['portal-data'] })}
             />
             <div className="env-grid">
-              {org.environments.map((env) => <EnvironmentCard key={env.id} env={env} vpnGuides={org.vpnGuides || []} lang={lang} />)}
+              {org.environments.map((env) => <EnvironmentCard key={env.id} env={env} vpnGuides={org.vpnGuides || []} lang={lang} canWrite={canWrite} />)}
             </div>
           </section>
         ))}
@@ -194,7 +196,7 @@ function removeEnvironmentFromPortalData(data: PortalData | undefined, environme
   };
 }
 
-function OrgVpnGuide({ lang, org, onSaved }: { lang: Lang; org: Organization; onSaved: () => void }) {
+function OrgVpnGuide({ lang, org, canWrite, onSaved }: { lang: Lang; org: Organization; canWrite: boolean; onSaved: () => void }) {
   const [editing, setEditing] = useState(false);
   const [editingGuide, setEditingGuide] = useState<VpnGuide | null>(null);
   const [guideName, setGuideName] = useState('');
@@ -308,7 +310,7 @@ function OrgVpnGuide({ lang, org, onSaved }: { lang: Lang; org: Organization; on
     return (
       <div className="vpn-guide-empty">
         <span>{t(lang, 'noVpnGuide')}</span>
-        <Button icon={<SafetyCertificateOutlined />} onClick={() => startEdit()}>{t(lang, 'addVpnGuide')}</Button>
+        {canWrite && <Button icon={<SafetyCertificateOutlined />} onClick={() => startEdit()}>{t(lang, 'addVpnGuide')}</Button>}
       </div>
     );
   }
@@ -327,9 +329,9 @@ function OrgVpnGuide({ lang, org, onSaved }: { lang: Lang; org: Organization; on
               <Button icon={<SaveOutlined />} type="primary" loading={saving} onClick={save}>{t(lang, 'save')}</Button>
               <Button onClick={() => setEditing(false)}>{t(lang, 'cancel')}</Button>
             </>
-          ) : (
+          ) : canWrite ? (
             <Button icon={<EditOutlined />} disabled={analyzing} onClick={() => startEdit()}>{t(lang, 'addVpnGuide')}</Button>
-          )}
+          ) : null}
         </Space>
       </div>
       {editing ? (
@@ -392,7 +394,7 @@ function OrgVpnGuide({ lang, org, onSaved }: { lang: Lang; org: Organization; on
                   {guide.workflowStatus === 'analyzing' && <Tag color="processing">{t(lang, 'aiAnalyzing')}</Tag>}
                   {(guide.sourceFiles || []).length > 0 && <Tag icon={<FileTextOutlined />}>{(guide.sourceFiles || []).length}</Tag>}
                 </Space>
-                <Button size="small" icon={<EditOutlined />} disabled={guide.workflowStatus === 'analyzing'} onClick={() => startEdit(guide)}>{t(lang, 'edit')}</Button>
+                {canWrite && <Button size="small" icon={<EditOutlined />} disabled={guide.workflowStatus === 'analyzing'} onClick={() => startEdit(guide)}>{t(lang, 'edit')}</Button>}
               </div>
               {(guide.sourceFiles || []).length > 0 && (
                 <div className="vpn-source-files">
@@ -635,7 +637,7 @@ function isVpnRequired(env: Environment): boolean {
   });
 }
 
-function EnvironmentCard({ env, vpnGuides, lang }: { env: Environment; vpnGuides: VpnGuide[]; lang: Lang }) {
+function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment; vpnGuides: VpnGuide[]; lang: Lang; canWrite: boolean }) {
   const health = useQuery({ queryKey: ['health', env.url], queryFn: () => fetchHealth(env.url), enabled: Boolean(env.url), refetchInterval: 60_000, staleTime: 50_000 });
   const config = useQuery({ queryKey: ['portal-config'], queryFn: fetchPortalConfig, refetchInterval: 30_000, staleTime: 20_000 });
   const queryClient = useQueryClient();
@@ -681,6 +683,7 @@ function EnvironmentCard({ env, vpnGuides, lang }: { env: Environment; vpnGuides
   };
 
   const updateVpn = async (vpnRequired: boolean, vpnGuideId?: string | null) => {
+    if (!canWrite) return;
     const previous = vpnState;
     const next = {
       required: vpnRequired,
@@ -887,6 +890,7 @@ function EnvironmentCard({ env, vpnGuides, lang }: { env: Environment; vpnGuides
               selectedVpnGuideId={selectedVpnGuideId}
               loading={vpnBusy}
               onChange={updateVpn}
+              disabled={!canWrite}
             />
           )}
           {remote && <RemoteQuickActions disabled={!remote.host} guacamoleAvailable={Boolean(config.data?.guacamoleAvailable)} lang={lang} remote={remote} onDirect={connectRdp} onGuac={openGuac} onRdp={() => downloadRdp()} />}
@@ -896,7 +900,7 @@ function EnvironmentCard({ env, vpnGuides, lang }: { env: Environment; vpnGuides
               <Button size="small" type="primary" icon={<SaveOutlined />} loading={serverBusy} onClick={saveAppServerDraft}>{t(lang, 'save')}</Button>
               <Button size="small" disabled={serverBusy} onClick={cancelEditDetails}>{t(lang, 'cancel')}</Button>
             </>
-          ) : (
+          ) : canWrite ? (
             <Dropdown
               trigger={['click']}
               menu={{
@@ -929,7 +933,7 @@ function EnvironmentCard({ env, vpnGuides, lang }: { env: Environment; vpnGuides
             >
               <Button type="text" className="more-action" icon={<MoreOutlined />} />
             </Dropdown>
-          )}
+          ) : null}
           {!editingDetails && (
             <Button
               size="small"
@@ -1311,7 +1315,7 @@ function EnvVpnDetail({ lang, guide, enabled }: { lang: Lang; guide: VpnGuide; e
   );
 }
 
-function EnvVpnSetting({ lang, vpnRequired, vpnGuides, selectedVpnGuideId, loading, onChange }: { lang: Lang; vpnRequired: boolean; vpnGuides: VpnGuide[]; selectedVpnGuideId?: string; loading: boolean; onChange: (vpnRequired: boolean, vpnGuideId?: string | null) => void }) {
+function EnvVpnSetting({ lang, vpnRequired, vpnGuides, selectedVpnGuideId, loading, disabled, onChange }: { lang: Lang; vpnRequired: boolean; vpnGuides: VpnGuide[]; selectedVpnGuideId?: string; loading: boolean; disabled?: boolean; onChange: (vpnRequired: boolean, vpnGuideId?: string | null) => void }) {
   const visibleGuideId = selectedVpnGuideId || vpnGuides[0]?.id;
 
   return (
@@ -1319,6 +1323,7 @@ function EnvVpnSetting({ lang, vpnRequired, vpnGuides, selectedVpnGuideId, loadi
       <Button
         size="small"
         loading={loading}
+        disabled={disabled}
         className={vpnRequired ? 'vpn-toggle active' : 'vpn-toggle'}
         icon={<SafetyCertificateOutlined />}
         onClick={() => onChange(!vpnRequired, !vpnRequired ? selectedVpnGuideId || vpnGuides[0]?.id : null)}
@@ -1328,7 +1333,7 @@ function EnvVpnSetting({ lang, vpnRequired, vpnGuides, selectedVpnGuideId, loadi
       <Select
         size="small"
         popupMatchSelectWidth={false}
-        disabled={loading || vpnGuides.length === 0}
+        disabled={disabled || loading || vpnGuides.length === 0}
         value={visibleGuideId}
         placeholder={t(lang, 'selectVpnGuide')}
         className={vpnRequired ? 'vpn-guide-select active' : 'vpn-guide-select available'}

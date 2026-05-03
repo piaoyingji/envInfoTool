@@ -4,12 +4,14 @@ import jaJP from 'antd/locale/ja_JP';
 import zhCN from 'antd/locale/zh_CN';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchPortalData } from './lib/api';
+import { fetchMe, fetchPortalData } from './lib/api';
 import { t } from './lib/i18n';
-import type { Environment, Lang, Organization } from './lib/types';
+import type { CurrentUser, Environment, Lang, Organization } from './lib/types';
 import EnvironmentPage from './pages/EnvironmentPage';
 import DataNavigator from './components/DataNavigator';
 import onecrmLogo from './assets/onecrm-logo.svg';
+import LoginPage from './pages/LoginPage';
+import { SystemMenu } from './components/SystemModals';
 
 const { Sider, Content } = Layout;
 const DataAdminPage = lazy(() => import('./pages/DataAdminPage'));
@@ -32,8 +34,15 @@ export default function App({ initialLang }: { initialLang: string }) {
   const [selectedOrg, setSelectedOrgState] = useState<string>(() => localStorage.getItem('onecrm.selectedOrg') || 'all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem('onecrm.navCollapsed') === '1');
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
-  const dataQuery = useQuery({ queryKey: ['portal-data'], queryFn: fetchPortalData, refetchInterval: 60_000 });
+  const meQuery = useQuery({ queryKey: ['auth-me'], queryFn: fetchMe });
+  useEffect(() => {
+    if (meQuery.data?.authenticated && meQuery.data.user) setCurrentUser(meQuery.data.user);
+    if (meQuery.data && !meQuery.data.authenticated) setCurrentUser(null);
+  }, [meQuery.data]);
+
+  const dataQuery = useQuery({ queryKey: ['portal-data'], queryFn: fetchPortalData, refetchInterval: 60_000, enabled: Boolean(currentUser) });
   const data = dataQuery.data || { organizations: [], tags: [] };
   const selectedOrgExists = selectedOrg === 'all' || data.organizations.some((org) => org.id === selectedOrg);
 
@@ -52,6 +61,16 @@ export default function App({ initialLang }: { initialLang: string }) {
     document.documentElement.lang = value === 'zh' ? 'zh-CN' : 'ja';
     setLang(value);
   };
+
+  if (!meQuery.isLoading && !currentUser) {
+    return (
+      <ConfigProvider locale={lang === 'zh' ? zhCN : jaJP}>
+        <LoginPage lang={lang} onLangChange={changeLang} onLogin={setCurrentUser} />
+      </ConfigProvider>
+    );
+  }
+
+  if (!currentUser) return null;
 
   const toggleNav = () => {
     const next = !navCollapsed;
@@ -137,7 +156,8 @@ export default function App({ initialLang }: { initialLang: string }) {
             <Button type="text" icon={<SearchOutlined />} />
             <Badge count={3} size="small"><Button type="text" icon={<BellOutlined />} /></Badge>
             <Button type="text" icon={<QuestionCircleOutlined />} />
-            <Avatar size={30} src="https://api.dicebear.com/9.x/notionists/svg?seed=onecrm" />
+            <SystemMenu lang={lang} user={currentUser} onUserChange={setCurrentUser} onLoggedOut={() => setCurrentUser(null)} />
+            <Avatar size={30} src={currentUser.avatarUrl ? `${currentUser.avatarUrl}?t=${Date.now()}` : undefined}>{currentUser.username[0]}</Avatar>
             <span className="lang-label">{t(lang, 'language')}</span>
             <Select value={lang} onChange={changeLang} className="lang-select" options={[{ value: 'ja', label: '日本語' }, { value: 'zh', label: '中文' }]} />
           </div>
@@ -154,7 +174,7 @@ export default function App({ initialLang }: { initialLang: string }) {
         <div className="workbench-layout">
           <Content className="content-wrap">
             {page === 'environments' && (
-              <EnvironmentPage lang={lang} organizations={organizations} allOrganizations={data.organizations} tags={data.tags} selectedTags={selectedTags} setSelectedTags={setSelectedTags} isGlobalView={isGlobalView} />
+              <EnvironmentPage lang={lang} organizations={organizations} allOrganizations={data.organizations} tags={data.tags} selectedTags={selectedTags} setSelectedTags={setSelectedTags} isGlobalView={isGlobalView} canWrite={currentUser.role === 'Admins'} />
             )}
             <Suspense fallback={null}>
               {page === 'data' && <DataAdminPage lang={lang} organizations={data.organizations} />}
