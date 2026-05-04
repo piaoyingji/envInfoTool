@@ -7,11 +7,17 @@ export type TagItem = {
 
 export type RemoteConnection = {
   id: string;
+  masterId?: string;
+  scope?: 'private' | 'shared' | string;
+  source?: 'private' | 'shared' | 'autoShared' | string;
+  name?: string;
   type: string;
   host: string;
   port?: number;
   username: string;
   password: string;
+  note?: string;
+  autoMatch?: boolean;
 };
 
 export type AppServer = {

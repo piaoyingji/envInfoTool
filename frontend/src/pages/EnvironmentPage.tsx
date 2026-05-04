@@ -3,13 +3,13 @@ import { Button, Card, Col, Dropdown, Input, Modal, Popconfirm, Progress, Row, S
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { createEnvironment, deleteEnvironment, fetchHealth, fetchPortalConfig, fetchVpnImportJob, importOrganizationVpnGuide, postForm, reanalyzeOrganizationVpnGuide, saveEnvironmentAppServers, saveEnvironmentDetails, saveEnvironmentVpnSetting, saveOrganizationVpnGuide } from '../lib/api';
+import { createEnvironment, deleteEnvironment, fetchHealth, fetchPortalConfig, fetchRemoteCheck, fetchVpnImportJob, importOrganizationVpnGuide, postForm, reanalyzeOrganizationVpnGuide, saveEnvironmentAppServers, saveEnvironmentDetails, saveEnvironmentRemoteConnections, saveEnvironmentVpnSetting, saveOrganizationVpnGuide } from '../lib/api';
 import { buildConnectionSummary } from '../lib/connectionSummary';
 import { t } from '../lib/i18n';
 import type { AppServer, Environment, Lang, Organization, PortalData, RemoteConnection, TagItem, VpnGuide, VpnImportJob, VpnWorkflowStep } from '../lib/types';
 import DashboardStats from '../components/DashboardStats';
 import OneTag, { oneTagColor, serviceTagColor } from '../components/OneTag';
-import { RemoteActions, RemoteQuickActions } from '../components/RemoteActions';
+import { RemoteActions } from '../components/RemoteActions';
 
 type Props = {
   lang: Lang;
@@ -759,7 +759,7 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
   const config = useQuery({ queryKey: ['portal-config'], queryFn: fetchPortalConfig, refetchInterval: 30_000, staleTime: 20_000 });
   const queryClient = useQueryClient();
   const ok = health.data && health.data.status !== 'ERROR';
-  const remote = env.remoteConnections[0];
+  const remotes = env.remoteConnections || [];
   const appServers = env.appServers || [];
   const [busy, setBusy] = useState(false);
   const [vpnBusy, setVpnBusy] = useState(false);
@@ -767,6 +767,7 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
   const [expanded, setExpanded] = useState(false);
   const [serverBusy, setServerBusy] = useState(false);
   const [appServerDraft, setAppServerDraft] = useState<AppServer[]>([]);
+  const [remoteDraft, setRemoteDraft] = useState<RemoteConnection[]>([]);
   const [envDraft, setEnvDraft] = useState<EnvironmentDraft>(() => createEnvironmentDraft(env));
   const [showAppAccessEditor, setShowAppAccessEditor] = useState(() => hasAppAccess(env));
   const [showDatabaseEditor, setShowDatabaseEditor] = useState(() => hasDatabaseInfo(env));
@@ -788,11 +789,12 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
   useEffect(() => {
     if (!editingDetails) {
       setAppServerDraft(appServers.map((server) => ({ ...server })));
+      setRemoteDraft(remotes.map((remote) => ({ ...remote })));
       setEnvDraft(createEnvironmentDraft(env));
       setShowAppAccessEditor(hasAppAccess(env));
       setShowDatabaseEditor(hasDatabaseInfo(env));
     }
-  }, [editingDetails, appServers, env]);
+  }, [editingDetails, appServers, remotes, env]);
 
   const copy = async (text: string) => {
     await navigator.clipboard.writeText(text || '');
@@ -827,6 +829,7 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
   const startEditDetails = () => {
     setEnvDraft(createEnvironmentDraft(env));
     setAppServerDraft(appServers.map((server) => ({ ...server })));
+    setRemoteDraft(remotes.map((remote) => ({ ...remote })));
     setShowAppAccessEditor(hasAppAccess(env));
     setShowDatabaseEditor(hasDatabaseInfo(env));
     setExpanded(true);
@@ -836,6 +839,7 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
   const cancelEditDetails = () => {
     setEnvDraft(createEnvironmentDraft(env));
     setAppServerDraft(appServers.map((server) => ({ ...server })));
+    setRemoteDraft(remotes.map((remote) => ({ ...remote })));
     setShowAppAccessEditor(hasAppAccess(env));
     setShowDatabaseEditor(hasDatabaseInfo(env));
     setEditingDetails(false);
@@ -855,6 +859,18 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
 
   const removeAppServer = (index: number) => {
     setAppServerDraft((servers) => servers.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const updateRemoteDraft = (index: number, patch: Partial<RemoteConnection>) => {
+    setRemoteDraft((items) => items.map((remote, itemIndex) => itemIndex === index ? { ...remote, ...patch } : remote));
+  };
+
+  const addRemoteConnection = () => {
+    setRemoteDraft((items) => [...items, emptyRemoteConnection()]);
+  };
+
+  const removeRemoteConnection = (index: number) => {
+    setRemoteDraft((items) => items.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const removeAppAccess = () => {
@@ -880,6 +896,7 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
     try {
       await saveEnvironmentDetails(env.id, envDraft);
       await saveEnvironmentAppServers(env.id, appServerDraft);
+      await saveEnvironmentRemoteConnections(env.id, remoteDraft);
       await queryClient.invalidateQueries({ queryKey: ['portal-data'] });
       setEditingDetails(false);
       message.success(t(lang, 'save'));
@@ -908,15 +925,15 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
     }
   };
 
-  const remoteTarget = remote ? `${remote.host}${remote.port ? `:${remote.port}` : ''}` : '';
+  const remoteTarget = (remote: RemoteConnection) => `${remote.host}${remote.port ? `:${remote.port}` : ''}`;
 
-  const downloadRdp = async (showBusy = true) => {
+  const downloadRdp = async (remote: RemoteConnection, showBusy = true) => {
     if (!remote) return;
     if (showBusy) setBusy(true);
     try {
       await navigator.clipboard.writeText(remote.password || '');
       const response = await postForm('/api/rdp/file', {
-        target: remoteTarget,
+        target: remoteTarget(remote),
         user: remote.username,
         password: remote.password,
         org: env.organization_name,
@@ -941,13 +958,13 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
     }
   };
 
-  const connectRdp = async () => {
+  const connectRdp = async (remote: RemoteConnection) => {
     if (!remote) return;
     setBusy(true);
     try {
       await navigator.clipboard.writeText(remote.password || '');
       const response = await postForm('/api/rdp/connect', {
-        target: remoteTarget,
+        target: remoteTarget(remote),
         user: remote.username,
         password: remote.password
       });
@@ -957,21 +974,21 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
         return;
       }
       message.warning(result?.message || t(lang, 'remoteFallback'));
-      await downloadRdp(false);
+      await downloadRdp(remote, false);
     } catch (error) {
       message.warning(error instanceof Error ? error.message : t(lang, 'remoteFallback'));
-      await downloadRdp(false);
+      await downloadRdp(remote, false);
     } finally {
       setBusy(false);
     }
   };
 
-  const openGuac = async () => {
+  const openGuac = async (remote: RemoteConnection) => {
     if (!remote) return;
     setBusy(true);
     try {
       const response = await postForm('/api/guacamole/connect', {
-        target: remoteTarget,
+        target: remoteTarget(remote),
         user: remote.username,
         password: remote.password
       });
@@ -981,7 +998,7 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
         return;
       }
       message.warning(result?.message || t(lang, 'remoteFallback'));
-      await downloadRdp(false);
+      await downloadRdp(remote, false);
     } finally {
       setBusy(false);
     }
@@ -994,7 +1011,7 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
           <Space>
             <span className="env-arrow">→</span>
             <h3>{env.title}</h3>
-            {remote?.type && <Tag color="blue">{remote.type}</Tag>}
+            {remotes[0]?.type && <Tag color="blue">{remotes[0].type}</Tag>}
           </Space>
           <TagLine tags={env.tags} />
         </div>
@@ -1010,7 +1027,6 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
               disabled={!canWrite}
             />
           )}
-          {remote && <RemoteQuickActions disabled={!remote.host} guacamoleAvailable={Boolean(config.data?.guacamoleAvailable)} lang={lang} remote={remote} onDirect={connectRdp} onGuac={openGuac} onRdp={() => downloadRdp()} />}
           {showDetails && canCheckHealth && <Tag color={ok ? 'success' : 'error'}>{ok ? t(lang, 'running') : t(lang, 'unreachable')}</Tag>}
           {editingDetails ? (
             <>
@@ -1116,18 +1132,19 @@ function EnvironmentCard({ env, vpnGuides, lang, canWrite }: { env: Environment;
       ) : showDetails && appServers.length > 0 ? (
         <AppServerInfoBlock lang={lang} servers={appServers} onCopy={copy} />
       ) : null}
-      {showDetails && remote && (
-        <InfoBlock title={t(lang, 'serverInfo')} tags={[remote.type]}>
-          <InfoRow label={t(lang, 'serverUser')} value={remote.username} onCopy={copy} />
-          <InfoRow label={t(lang, 'serverPassword')} value={remote.password} secret onCopy={copy} />
-          <InfoRow
-            label={t(lang, 'serverAddress')}
-            value={remoteTarget}
-            onCopy={copy}
-            extra={<RemoteActions disabled={!remote.host} guacamoleAvailable={Boolean(config.data?.guacamoleAvailable)} lang={lang} remote={remote} onDirect={connectRdp} onGuac={openGuac} onRdp={() => downloadRdp()} />}
-          />
-        </InfoBlock>
-      )}
+      {showDetails && editingDetails ? (
+        <RemoteConnectionEditor lang={lang} remotes={remoteDraft} disabled={serverBusy} onAdd={addRemoteConnection} onRemove={removeRemoteConnection} onChange={updateRemoteDraft} />
+      ) : showDetails && remotes.length > 0 ? (
+        <RemoteConnectionInfoBlock
+          lang={lang}
+          remotes={remotes}
+          guacamoleAvailable={Boolean(config.data?.guacamoleAvailable)}
+          onCopy={copy}
+          onDirect={connectRdp}
+          onGuac={openGuac}
+          onRdp={(remote) => downloadRdp(remote)}
+        />
+      ) : null}
     </Card>
   );
 }
@@ -1385,6 +1402,115 @@ function AppServerEditor({ lang, servers, disabled, onAdd, onRemove, onChange }:
           </div>
         ))}
         <Button icon={<PlusOutlined />} disabled={disabled} onClick={onAdd}>{t(lang, 'addAppServer')}</Button>
+      </div>
+    </InfoBlock>
+  );
+}
+
+function emptyRemoteConnection(): RemoteConnection {
+  return { id: '', scope: 'private', source: 'private', name: '', type: 'RDP', host: '', port: 3389, username: '', password: '', note: '' };
+}
+
+function RemoteConnectionInfoBlock({ lang, remotes, guacamoleAvailable, onCopy, onDirect, onGuac, onRdp }: { lang: Lang; remotes: RemoteConnection[]; guacamoleAvailable: boolean; onCopy: (value: string) => void; onDirect: (remote: RemoteConnection) => void; onGuac: (remote: RemoteConnection) => void; onRdp: (remote: RemoteConnection) => void }) {
+  return (
+    <InfoBlock title={t(lang, 'remoteConnectionInfo')} tags={Array.from(new Set(remotes.map((remote) => remote.type).filter(Boolean)))}>
+      <div className="app-server-list">
+        {remotes.map((remote, index) => (
+          <RemoteConnectionItem
+            key={remote.id || remote.masterId || `${remote.host}-${remote.port}-${index}`}
+            lang={lang}
+            remote={remote}
+            guacamoleAvailable={guacamoleAvailable}
+            onCopy={onCopy}
+            onDirect={onDirect}
+            onGuac={onGuac}
+            onRdp={onRdp}
+          />
+        ))}
+      </div>
+    </InfoBlock>
+  );
+}
+
+function RemoteConnectionItem({ lang, remote, guacamoleAvailable, onCopy, onDirect, onGuac, onRdp }: { lang: Lang; remote: RemoteConnection; guacamoleAvailable: boolean; onCopy: (value: string) => void; onDirect: (remote: RemoteConnection) => void; onGuac: (remote: RemoteConnection) => void; onRdp: (remote: RemoteConnection) => void }) {
+  const check = useQuery({
+    queryKey: ['remote-check', remote.type, remote.host, remote.port],
+    queryFn: () => fetchRemoteCheck(remote),
+    enabled: Boolean(remote.host),
+    refetchInterval: 60_000,
+    staleTime: 50_000
+  });
+  const reachable = Boolean(check.data?.ok);
+  const target = `${remote.host}${remote.port ? `:${remote.port}` : ''}`;
+  const scopeLabel = remote.scope === 'shared' ? t(lang, 'remoteShared') : t(lang, 'remotePrivate');
+  const sourceLabel = remote.source === 'autoShared' ? t(lang, 'autoShared') : scopeLabel;
+  return (
+    <div className="app-server-item">
+      <div className="app-server-head">
+        <strong>{remote.name || target || t(lang, 'remoteConnectionInfo')}</strong>
+        <Space size={6} wrap>
+          <Tag color={remote.scope === 'shared' ? 'gold' : 'default'}>{sourceLabel}</Tag>
+          <Tag color={reachable ? 'success' : 'error'}>{reachable ? t(lang, 'remoteReachable') : t(lang, 'remoteUnreachable')}</Tag>
+        </Space>
+      </div>
+      {!reachable && <div className="remote-check-warning">{t(lang, 'remoteCheckHint')}</div>}
+      <InfoRow label={t(lang, 'serverAddress')} value={target} onCopy={onCopy} extra={<RemoteActions disabled={!reachable} guacamoleAvailable={guacamoleAvailable} lang={lang} remote={remote} onDirect={() => onDirect(remote)} onGuac={() => onGuac(remote)} onRdp={() => onRdp(remote)} />} />
+      <InfoRow label={t(lang, 'serverUser')} value={remote.username} onCopy={onCopy} />
+      <InfoRow label={t(lang, 'serverPassword')} value={remote.password} secret onCopy={onCopy} />
+      {remote.note && <InfoRow label={t(lang, 'remoteNote')} value={remote.note} onCopy={onCopy} />}
+    </div>
+  );
+}
+
+function RemoteConnectionEditor({ lang, remotes, disabled, onAdd, onRemove, onChange }: { lang: Lang; remotes: RemoteConnection[]; disabled: boolean; onAdd: () => void; onRemove: (index: number) => void; onChange: (index: number, patch: Partial<RemoteConnection>) => void }) {
+  return (
+    <InfoBlock title={t(lang, 'remoteConnectionInfo')}>
+      <div className="app-server-editor-list">
+        {remotes.map((remote, index) => (
+          <div className="app-server-edit-card" key={remote.id || remote.masterId || index}>
+            <div className="app-server-edit-grid">
+              <label>
+                <span>{t(lang, 'remoteScope')}</span>
+                <Select
+                  disabled={disabled || remote.source === 'autoShared'}
+                  value={remote.scope || 'private'}
+                  options={[{ value: 'private', label: t(lang, 'remotePrivate') }, { value: 'shared', label: t(lang, 'remoteShared') }]}
+                  onChange={(value) => onChange(index, { scope: value })}
+                />
+              </label>
+              <label>
+                <span>{t(lang, 'type')}</span>
+                <Select disabled={disabled || remote.source === 'autoShared'} value={remote.type || 'RDP'} options={[{ value: 'RDP', label: 'RDS/RDP' }, { value: 'SSH', label: 'SSH' }]} onChange={(value) => onChange(index, { type: value, port: value === 'SSH' ? 22 : 3389 })} />
+              </label>
+              <label>
+                <span>{t(lang, 'remoteName')}</span>
+                <Input disabled={disabled || remote.source === 'autoShared'} value={remote.name || ''} onChange={(event) => onChange(index, { name: event.target.value })} />
+              </label>
+              <label>
+                <span>{t(lang, 'remoteHost')}</span>
+                <Input disabled={disabled || remote.source === 'autoShared'} value={remote.host || ''} onChange={(event) => onChange(index, { host: event.target.value })} />
+              </label>
+              <label>
+                <span>{t(lang, 'remotePort')}</span>
+                <Input disabled={disabled || remote.source === 'autoShared'} value={remote.port ?? ''} onChange={(event) => onChange(index, { port: event.target.value ? Number(event.target.value) : undefined })} />
+              </label>
+              <label>
+                <span>{t(lang, 'serverUser')}</span>
+                <Input disabled={disabled || remote.source === 'autoShared'} value={remote.username || ''} onChange={(event) => onChange(index, { username: event.target.value })} />
+              </label>
+              <label>
+                <span>{t(lang, 'serverPassword')}</span>
+                <Input.Password disabled={disabled || remote.source === 'autoShared'} value={remote.password || ''} onChange={(event) => onChange(index, { password: event.target.value })} />
+              </label>
+              <label className="app-server-note-input">
+                <span>{t(lang, 'remoteNote')}</span>
+                <Input disabled={disabled || remote.source === 'autoShared'} value={remote.note || ''} onChange={(event) => onChange(index, { note: event.target.value })} />
+              </label>
+            </div>
+            <Button danger size="small" icon={<DeleteOutlined />} disabled={disabled} onClick={() => onRemove(index)} />
+          </div>
+        ))}
+        <Button icon={<PlusOutlined />} disabled={disabled} onClick={onAdd}>{t(lang, 'addRemoteConnection')}</Button>
       </div>
     </InfoBlock>
   );

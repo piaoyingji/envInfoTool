@@ -78,13 +78,36 @@ def init_db() -> None:
                     id uuid primary key,
                     organization_id uuid references organizations(id) on delete cascade,
                     environment_id uuid references environments(id) on delete set null,
+                    scope text not null default 'private',
+                    name text not null default '',
                     type text not null default 'RDP',
                     host text not null default '',
                     port integer,
                     username text not null default '',
                     password text not null default '',
+                    note text not null default '',
                     created_at timestamptz not null default now(),
                     updated_at timestamptz not null default now()
+                );
+                create table if not exists remote_connection_masters (
+                    id uuid primary key,
+                    scope text not null default 'shared',
+                    name text not null default '',
+                    type text not null default 'RDP',
+                    host text not null default '',
+                    port integer,
+                    username text not null default '',
+                    password text not null default '',
+                    note text not null default '',
+                    auto_match boolean not null default true,
+                    created_at timestamptz not null default now(),
+                    updated_at timestamptz not null default now()
+                );
+                create table if not exists environment_remote_master_links (
+                    environment_id uuid not null references environments(id) on delete cascade,
+                    master_id uuid not null references remote_connection_masters(id) on delete cascade,
+                    created_at timestamptz not null default now(),
+                    primary key(environment_id, master_id)
                 );
                 create table if not exists app_servers (
                     id uuid primary key,
@@ -234,6 +257,9 @@ def init_db() -> None:
             cur.execute("alter table vpn_import_jobs add column if not exists precedence_summary text not null default ''")
             cur.execute("alter table environments add column if not exists vpn_required boolean not null default false")
             cur.execute("alter table environments add column if not exists vpn_guide_id uuid references vpn_guides(id) on delete set null")
+            cur.execute("alter table remote_connections add column if not exists scope text not null default 'private'")
+            cur.execute("alter table remote_connections add column if not exists name text not null default ''")
+            cur.execute("alter table remote_connections add column if not exists note text not null default ''")
             cur.execute("alter table app_servers add column if not exists os text not null default ''")
             cur.execute("alter table app_servers add column if not exists note text not null default ''")
             cur.execute("alter table app_servers add column if not exists details jsonb not null default '[]'::jsonb")
@@ -430,6 +456,63 @@ def parse_host_port(target: str, default_port: int) -> tuple[str, int]:
         except ValueError:
             return text, default_port
     return text, default_port
+
+
+def remote_default_port(remote_type: str) -> int:
+    text = (remote_type or "RDP").strip().upper()
+    if text in ("SSH",):
+        return 22
+    return 3389
+
+
+def normalize_remote_row(row: dict[str, Any], source: str = "private") -> dict[str, Any]:
+    remote = decrypt_row(dict(row))
+    remote_type = remote.get("type") or "RDP"
+    port = remote.get("port") or remote_default_port(remote_type)
+    return {
+        "id": remote.get("id"),
+        "masterId": remote.get("master_id") or remote.get("masterId"),
+        "organization_id": remote.get("organization_id"),
+        "environment_id": remote.get("environment_id"),
+        "scope": remote.get("scope") or ("shared" if source in ("shared", "autoShared") else "private"),
+        "source": source,
+        "name": remote.get("name") or "",
+        "type": remote_type,
+        "host": remote.get("host") or "",
+        "port": port,
+        "username": remote.get("username") or "",
+        "password": remote.get("password") or "",
+        "note": remote.get("note") or "",
+        "autoMatch": bool(remote.get("auto_match", True)),
+    }
+
+
+def normalize_remote_input(value: dict[str, Any]) -> dict[str, Any]:
+    remote_type = str(value.get("type") or "RDP").strip() or "RDP"
+    port_value = value.get("port")
+    try:
+        port = int(port_value) if port_value not in (None, "") else remote_default_port(remote_type)
+    except (TypeError, ValueError):
+        port = remote_default_port(remote_type)
+    scope = str(value.get("scope") or "private").strip()
+    if scope not in ("private", "shared"):
+        scope = "private"
+    return {
+        "id": str(value.get("id") or "").strip(),
+        "masterId": str(value.get("masterId") or value.get("master_id") or "").strip(),
+        "scope": scope,
+        "name": str(value.get("name") or "").strip(),
+        "type": remote_type,
+        "host": str(value.get("host") or "").strip(),
+        "port": port,
+        "username": str(value.get("username") or "").strip(),
+        "password": str(value.get("password") or "").strip(),
+        "note": str(value.get("note") or "").strip(),
+    }
+
+
+def remote_key(remote: dict[str, Any]) -> tuple[str, int]:
+    return ((remote.get("host") or "").strip().lower(), int(remote.get("port") or remote_default_port(remote.get("type") or "RDP")))
 
 
 def upsert_environment_tags(cur: psycopg.Cursor, env_id: uuid.UUID, names: list[str], source: str = "manual") -> None:
@@ -653,7 +736,16 @@ def organizations_with_environments() -> list[dict[str, Any]]:
             for tag in cur.fetchall():
                 tags_by_env.setdefault(tag["environment_id"], []).append({"name": tag["name"], "source": tag["source"]})
             cur.execute("select * from remote_connections order by type, host")
-            remotes = [decrypt_row(row) for row in cur.fetchall()]
+            remotes = [normalize_remote_row(dict(row), "private") for row in cur.fetchall()]
+            cur.execute("select * from remote_connection_masters order by type, host, port, name")
+            remote_masters = [normalize_remote_row(dict(row) | {"master_id": row["id"]}, "shared") for row in cur.fetchall()]
+            masters_by_id = {master["masterId"] or master["id"]: master for master in remote_masters}
+            cur.execute("select environment_id, master_id from environment_remote_master_links")
+            remote_master_links: dict[Any, list[dict[str, Any]]] = {}
+            for row in cur.fetchall():
+                master = masters_by_id.get(row["master_id"])
+                if master:
+                    remote_master_links.setdefault(row["environment_id"], []).append(dict(master) | {"source": "shared"})
             cur.execute("select * from app_servers order by order_index, type, name, host")
             app_servers_by_env: dict[Any, list[dict[str, Any]]] = {}
             for row in cur.fetchall():
@@ -686,11 +778,18 @@ def organizations_with_environments() -> list[dict[str, Any]]:
         env["tags"] = tags_by_env.get(env["id"], [])
         env["vpnGuide"] = guides_by_id.get(env.get("vpn_guide_id"))
         env["appServers"] = app_servers_by_env.get(env["id"], [])
-        env["remoteConnections"] = [
+        private_remotes = [
             remote for remote in remotes
             if remote.get("environment_id") == env["id"]
             or (not remote.get("environment_id") and remote.get("organization_id") == env["organization_id"])
         ]
+        linked_remotes = remote_master_links.get(env["id"], [])
+        auto_remotes = [
+            dict(master) | {"source": "autoShared"}
+            for master in remote_masters
+            if master.get("autoMatch") and remote_matches_environment(master, env, app_servers_by_env.get(env["id"], []))
+        ]
+        env["remoteConnections"] = dedupe_remote_connections(private_remotes + linked_remotes + auto_remotes)
         envs_by_org.setdefault(env["organization_id"], []).append(env)
     for index, org in enumerate(orgs):
         normalized = normalize_organization(org)
@@ -1495,6 +1594,162 @@ def attach_orphan_remote_connections(envs: list[dict[str, Any]], remotes: list[d
                 remote["environment_id"] = env["id"]
                 remote["organization_id"] = env["organization_id"]
                 break
+
+
+def remote_matches_environment(remote: dict[str, Any], env: dict[str, Any], app_servers: list[dict[str, Any]]) -> bool:
+    host, port = remote_key(remote)
+    if not host:
+        return False
+    candidates: set[tuple[str, int]] = set()
+    if host in (env.get("url") or "").lower():
+        candidates.add((host, port))
+    db_host = (env.get("db_host") or "").strip().lower()
+    if db_host:
+        candidates.add((db_host, int(env.get("db_port") or port)))
+    for server in app_servers:
+        server_host = (server.get("host") or "").strip().lower()
+        if server_host:
+            candidates.add((server_host, int(server.get("port") or port)))
+    return (host, port) in candidates
+
+
+def dedupe_remote_connections(remotes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[tuple[str, str, int, str, str]] = set()
+    result: list[dict[str, Any]] = []
+    for remote in remotes:
+        master_id = str(remote.get("masterId") or remote.get("master_id") or "").strip()
+        host = (remote.get("host") or "").strip().lower()
+        if master_id:
+            key = ("master", master_id, 0, "", "")
+        else:
+            key = (
+                "remote",
+                host,
+                int(remote.get("port") or remote_default_port(remote.get("type") or "RDP")),
+                (remote.get("username") or "").strip().lower(),
+                (remote.get("source") or "").strip(),
+            )
+        if not host or key in seen:
+            continue
+        seen.add(key)
+        result.append(remote)
+    return result
+
+
+def list_remote_masters() -> list[dict[str, Any]]:
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("select * from remote_connection_masters order by type, host, port, name")
+            return [normalize_remote_row(dict(row) | {"master_id": row["id"]}, "shared") for row in cur.fetchall()]
+
+
+def save_remote_master(values: dict[str, Any], master_id: str | None = None) -> dict[str, Any]:
+    remote = normalize_remote_input(values)
+    if not remote["host"]:
+        raise ValueError("Remote host is required")
+    with connect() as conn:
+        with conn.cursor() as cur:
+            if master_id:
+                cur.execute(
+                    """
+                    update remote_connection_masters
+                    set scope='shared', name=%s, type=%s, host=%s, port=%s, username=%s, password=%s, note=%s, auto_match=%s, updated_at=now()
+                    where id=%s
+                    returning *
+                    """,
+                    (
+                        remote["name"], remote["type"], remote["host"], remote["port"],
+                        remote["username"], encrypt_text(remote["password"]), remote["note"],
+                        bool(values.get("autoMatch", True)), master_id,
+                    ),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise ValueError("Remote master not found")
+            else:
+                cur.execute(
+                    """
+                    insert into remote_connection_masters(id, scope, name, type, host, port, username, password, note, auto_match)
+                    values(%s,'shared',%s,%s,%s,%s,%s,%s,%s,%s)
+                    returning *
+                    """,
+                    (
+                        uuid.uuid4(), remote["name"], remote["type"], remote["host"], remote["port"],
+                        remote["username"], encrypt_text(remote["password"]), remote["note"],
+                        bool(values.get("autoMatch", True)),
+                    ),
+                )
+                row = cur.fetchone()
+        conn.commit()
+    return normalize_remote_row(dict(row) | {"master_id": row["id"]}, "shared")
+
+
+def delete_remote_master(master_id: str) -> dict[str, Any]:
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("delete from remote_connection_masters where id=%s returning id", (master_id,))
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("Remote master not found")
+        conn.commit()
+    return {"ok": True, "id": master_id}
+
+
+def update_environment_remote_connections(environment_id: str, remotes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("select id, organization_id from environments where id=%s", (environment_id,))
+            env = cur.fetchone()
+            if not env:
+                raise ValueError("Environment not found")
+            cur.execute("delete from remote_connections where environment_id=%s", (environment_id,))
+            cur.execute("delete from environment_remote_master_links where environment_id=%s", (environment_id,))
+            saved: list[dict[str, Any]] = []
+            for item in remotes:
+                remote = normalize_remote_input(item)
+                if not any([remote["host"], remote["username"], remote["password"], remote["name"], remote["note"]]):
+                    continue
+                if remote["scope"] == "shared":
+                    master_id = remote["masterId"]
+                    if master_id:
+                        cur.execute("select * from remote_connection_masters where id=%s", (master_id,))
+                        master_row = cur.fetchone()
+                        if not master_row:
+                            continue
+                    else:
+                        cur.execute(
+                            """
+                            insert into remote_connection_masters(id, scope, name, type, host, port, username, password, note, auto_match)
+                            values(%s,'shared',%s,%s,%s,%s,%s,%s,%s,true)
+                            returning *
+                            """,
+                            (
+                                uuid.uuid4(), remote["name"], remote["type"], remote["host"], remote["port"],
+                                remote["username"], encrypt_text(remote["password"]), remote["note"],
+                            ),
+                        )
+                        master_row = cur.fetchone()
+                        master_id = str(master_row["id"])
+                    cur.execute(
+                        "insert into environment_remote_master_links(environment_id, master_id) values(%s,%s) on conflict do nothing",
+                        (environment_id, master_id),
+                    )
+                    saved.append(normalize_remote_row(dict(master_row) | {"master_id": master_id}, "shared"))
+                else:
+                    cur.execute(
+                        """
+                        insert into remote_connections(id, organization_id, environment_id, scope, name, type, host, port, username, password, note)
+                        values(%s,%s,%s,'private',%s,%s,%s,%s,%s,%s,%s)
+                        returning *
+                        """,
+                        (
+                            uuid.uuid4(), env["organization_id"], environment_id, remote["name"], remote["type"],
+                            remote["host"], remote["port"], remote["username"], encrypt_text(remote["password"]), remote["note"],
+                        ),
+                    )
+                    saved.append(normalize_remote_row(dict(cur.fetchone()), "private"))
+        conn.commit()
+    return saved
 
 
 def all_tags() -> list[dict[str, str]]:

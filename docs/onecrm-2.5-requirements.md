@@ -56,9 +56,14 @@ The product name is `OneCRM`. The legacy `EnvPortal` name is kept only in migrat
 ## Remote Connection Requirements
 
 - RDP and SSH are remote connection types, but the product language should be server/remote connection rather than RDP-only.
+- Remote connections may be `private` or `shared`. Private records belong only to one server/environment. Shared records are public RDS/RDP/SSH connection masters that Admins explicitly maintain from the system menu.
+- The system must not infer sharing from IP alone. Automatic reuse is allowed only for shared masters and uses `host + port` as the endpoint key. Same IP with different ports represents different endpoints unless Admins register each endpoint as shared.
+- A server/environment can show multiple remote connections. The UI must not collapse behavior to the first record.
+- Each remote connection needs name, type, host/IP, port, username, password, note, source, scope, and a server-side reachability state.
 - RDP supports direct connect on trusted local/server contexts when the browser/server environment allows it.
 - When direct local execution is not possible, OneCRM falls back to signed `.rdp` file download and copies the password to the clipboard.
 - RDP file and certificate actions are disabled when the target server is unavailable or remote information is incomplete.
+- Reachability checks are performed from the OneCRM server by TCP connect to `host + port`; browsers do not attempt raw TCP checks.
 - Apache Guacamole integration is preserved. If available, OneCRM can create/open browser remote desktop sessions.
 - Guacamole drive sharing must isolate per-connection session directories to avoid mixing user files.
 

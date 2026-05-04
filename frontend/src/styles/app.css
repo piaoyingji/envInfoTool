@@ -90,6 +90,30 @@ body {
   margin-bottom: 18px;
 }
 
+.system-modal-stack {
+  width: 100%;
+}
+
+.remote-master-compact-type {
+  width: 150px;
+}
+
+.remote-master-compact-host {
+  width: calc(100% - 270px);
+}
+
+.remote-master-compact-port {
+  width: 120px;
+}
+
+.remote-master-compact-port .ant-input-number {
+  width: 100%;
+}
+
+.remote-master-compact-half {
+  width: 50%;
+}
+
 button,
 input,
 select {
@@ -1798,6 +1822,12 @@ select {
   margin-top: 2px;
 }
 
+.remote-check-warning {
+  margin: 6px 0 8px;
+  color: #9b6a16;
+  font-size: 12px;
+}
+
 .app-server-head {
   display: flex;
   align-items: center;
@@ -1851,6 +1881,12 @@ select {
 }
 
 .app-server-edit-grid .ant-input {
+  min-width: 0;
+}
+
+.app-server-edit-grid .ant-input-number,
+.app-server-edit-grid .ant-select {
+  width: 100%;
   min-width: 0;
 }
 

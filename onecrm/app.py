@@ -4,6 +4,7 @@ import hashlib
 import json
 import mimetypes
 import re
+import socket
 import threading
 import urllib.parse
 import urllib.request
@@ -21,7 +22,7 @@ from . import __version__
 from .ai import summarize_vpn_workflow_with_ai
 from .auth import ROLE_ADMINS, ROLE_USERS, SESSION_COOKIE, authenticate, change_own_password, create_password_reset, create_session, create_user, delete_session, get_user, list_users, reset_password_by_token, reset_user_password, set_user_disabled, update_avatar, update_own_profile, update_user, user_from_session
 from .cache import get_json, set_json
-from .db import all_tags, attach_file_to_vpn_guide, audit, create_environment, create_organization, create_vpn_import_job, delete_environment, file_objects_by_ids, get_organization, get_vpn_guide, get_vpn_import_job, init_db, organizations_with_environments, save_file_object, save_vpn_guide_raw, summarize_vpn_workflow, update_app_servers, update_environment_details, update_environment_vpn, update_organization, update_vpn_guide_file_metadata, update_vpn_guide_workflow, update_vpn_import_job, vpn_guide_source_files
+from .db import all_tags, attach_file_to_vpn_guide, audit, create_environment, create_organization, create_vpn_import_job, delete_environment, delete_remote_master, file_objects_by_ids, get_organization, get_vpn_guide, get_vpn_import_job, init_db, list_remote_masters, organizations_with_environments, remote_default_port, save_file_object, save_remote_master, save_vpn_guide_raw, summarize_vpn_workflow, update_app_servers, update_environment_details, update_environment_remote_connections, update_environment_vpn, update_organization, update_vpn_guide_file_metadata, update_vpn_guide_workflow, update_vpn_import_job, vpn_guide_source_files
 from .mail import send_password_reset_mail
 from .settings import APP_NAME, BASE_DIR, HERMES_TIMEOUT_SECONDS, HERMES_URL, MINIO_BUCKET, PUBLIC_URL, UPLOAD_MAX_FILE_MB, UPLOAD_MAX_JOB_MB, UPLOAD_REJECT_EXTENSIONS, VERSION
 from .storage import ensure_bucket, get_object_bytes, put_bytes_if_missing
@@ -310,6 +311,44 @@ async def api_update_organization(organization_id: str, request: Request) -> dic
 @app.get("/api/tags")
 def api_tags() -> dict[str, Any]:
     return {"tags": all_tags()}
+
+
+@app.get("/api/remote-masters")
+def api_remote_masters() -> dict[str, Any]:
+    return {"remotes": list_remote_masters()}
+
+
+@app.post("/api/remote-masters")
+async def api_create_remote_master(request: Request) -> dict[str, Any]:
+    payload = await request.json()
+    try:
+        result = save_remote_master(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    audit_as(request, "create_remote_master", "remote", result["masterId"], payload=strip_secret(result))
+    return result
+
+
+@app.patch("/api/remote-masters/{master_id}")
+async def api_update_remote_master(master_id: str, request: Request) -> dict[str, Any]:
+    payload = await request.json()
+    try:
+        result = save_remote_master(payload, master_id)
+    except ValueError as exc:
+        status = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    audit_as(request, "update_remote_master", "remote", master_id, payload=strip_secret(result))
+    return result
+
+
+@app.delete("/api/remote-masters/{master_id}")
+def api_delete_remote_master(master_id: str, request: Request) -> dict[str, Any]:
+    try:
+        result = delete_remote_master(master_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    audit_as(request, "delete_remote_master", "remote", master_id)
+    return result
 
 
 @app.get("/api/files/{file_id}/download")
@@ -850,6 +889,17 @@ async def api_update_app_servers(environment_id: str, request: Request) -> dict[
     return {"servers": servers}
 
 
+@app.patch("/api/environments/{environment_id}/remote-connections")
+async def api_update_remote_connections(environment_id: str, request: Request) -> dict[str, Any]:
+    payload = await request.json()
+    try:
+        remotes = update_environment_remote_connections(environment_id, list(payload.get("remotes") or []))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    audit_as(request, "update_remote_connections", "environment", environment_id, payload={"count": len(remotes)})
+    return {"remotes": remotes}
+
+
 @app.get("/api/env-check")
 def api_env_check(url: str) -> dict[str, Any]:
     key = f"env-check:{url}"
@@ -857,6 +907,33 @@ def api_env_check(url: str) -> dict[str, Any]:
     if cached:
         return cached
     result = legacy.env_check(url)
+    set_json(key, result, 60)
+    return result
+
+
+@app.get("/api/remote-check")
+def api_remote_check(type: str = "RDP", host: str = "", port: int | None = None) -> dict[str, Any]:
+    clean_host = host.strip()
+    clean_type = type.strip() or "RDP"
+    clean_port = int(port or remote_default_port(clean_type))
+    key = f"remote-check:{clean_type}:{clean_host}:{clean_port}"
+    cached = get_json(key)
+    if cached:
+        return cached
+    started = datetime.now(timezone.utc)
+    ok = False
+    message = ""
+    if not clean_host:
+        message = "Missing remote host"
+    else:
+        try:
+            with socket.create_connection((clean_host, clean_port), timeout=2.5):
+                ok = True
+                message = "Reachable"
+        except Exception as exc:
+            message = str(exc)
+    elapsed = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
+    result = {"ok": ok, "type": clean_type, "host": clean_host, "port": clean_port, "elapsedMs": elapsed, "message": message}
     set_json(key, result, 60)
     return result
 

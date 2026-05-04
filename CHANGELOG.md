@@ -8,6 +8,24 @@ All notable changes to OneCRM are documented here.
 
 - NewUI branch development is versioned continuously. Every stable feature or behavior batch should receive a 2.5.x patch version before commit instead of accumulating indefinitely under 2.5.0.
 
+## [2.5.16] - 2026-05-05
+
+### Added
+
+- Restored multi-entry remote connection maintenance for server/environment cards.
+- Added private/shared RDS/RDP scope so same IP does not imply cross-customer reuse.
+- Added public remote connection master maintenance under the top-bar system menu for Admins.
+- Added `remote_connection_masters` and `environment_remote_master_links` for explicit shared RDS/RDP reuse.
+- Added server-side TCP reachability check endpoint for each remote endpoint.
+- Added APIs for remote masters and environment remote connection replacement.
+
+### Changed
+
+- Raised the current application version to `2.5.16`.
+- Environment display now renders every remote connection instead of only `remoteConnections[0]`.
+- Remote action buttons are enabled only when OneCRM server-side reachability check succeeds.
+- Shared remote auto matching uses `host + port`; same IP with different ports is not mixed unless Admin records matching shared endpoints.
+
 ## [2.5.15] - 2026-05-04
 
 ### Added

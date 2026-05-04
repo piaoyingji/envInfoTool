@@ -35,6 +35,18 @@ OneCRM 2.5 replaces the static EnvPortal UI with a React/Ant Design enterprise i
 - Customer deletion is intentionally omitted in this phase because it would need explicit cascade policy for environments, VPN guides, source files, remote connections, and audit history.
 - The frontend customer master page shows existing environment summaries as read-only context and reserves non-mock placeholders for contracts, implemented products, custom development, and code comparison.
 
+## Remote Connection Scope and Masters
+
+2.5.16 restores multi-record RDS/RDP maintenance and separates private remote records from shared remote masters.
+
+- `remote_connections` stores private environment-level records and includes `scope`, `name`, and `note`.
+- `remote_connection_masters` stores shared endpoints maintained from the top-bar system menu.
+- `environment_remote_master_links` stores explicit environment-to-master links.
+- `/api/organizations` merges private records, explicitly linked shared masters, and auto-matched shared masters into each environment's `remoteConnections`.
+- Auto matching is intentionally conservative: only shared masters with `auto_match=true` are considered, and the endpoint key is `host + port`. Same IP on different ports is not reused by IP alone.
+- `/api/remote-check` performs server-side TCP reachability checks and caches short-lived results. Remote direct, Guacamole, RDP file, and certificate actions are enabled only when the endpoint is reachable from the OneCRM server.
+- Admin write APIs are `/api/remote-masters` and `/api/environments/{id}/remote-connections`; Users remain read-only.
+
 ## VPN Credential Groups
 
 AI workflow steps may include `credentialGroups`, an array of server/hop credential objects. Each group binds host/address, port, protocol, username, password, note, and auxiliary details to one exact connection target. This prevents the UI from showing unrelated lists of servers and passwords that operators cannot safely associate.

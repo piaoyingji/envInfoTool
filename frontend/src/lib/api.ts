@@ -1,4 +1,4 @@
-import type { AppServer, AuthState, CurrentUser, Environment, HealthResult, Organization, PortalConfig, PortalData, VpnGuide, VpnImportJob } from './types';
+import type { AppServer, AuthState, CurrentUser, Environment, HealthResult, Organization, PortalConfig, PortalData, RemoteConnection, VpnGuide, VpnImportJob } from './types';
 
 async function readJson<T>(response: Response, fallback: string): Promise<T> {
   const result = await response.json().catch(() => ({}));
@@ -113,6 +113,35 @@ export async function fetchPortalConfig(): Promise<PortalConfig> {
   const response = await fetch('/api/config');
   if (!response.ok) throw new Error('Failed to load portal config');
   return response.json();
+}
+
+export async function fetchRemoteMasters(): Promise<{ remotes: RemoteConnection[] }> {
+  const response = await fetch('/api/remote-masters');
+  return readJson(response, 'Failed to load remote masters');
+}
+
+export async function saveRemoteMaster(values: Partial<RemoteConnection>, masterId?: string): Promise<RemoteConnection> {
+  const response = await fetch(masterId ? `/api/remote-masters/${encodeURIComponent(masterId)}` : '/api/remote-masters', {
+    method: masterId ? 'PATCH' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(values)
+  });
+  return readJson(response, 'Failed to save remote master');
+}
+
+export async function deleteRemoteMaster(masterId: string): Promise<{ ok: boolean; id: string }> {
+  const response = await fetch(`/api/remote-masters/${encodeURIComponent(masterId)}`, { method: 'DELETE' });
+  return readJson(response, 'Failed to delete remote master');
+}
+
+export async function fetchRemoteCheck(remote: Pick<RemoteConnection, 'type' | 'host' | 'port'>): Promise<{ ok: boolean; type: string; host: string; port: number; elapsedMs: number; message: string }> {
+  const params = new URLSearchParams({
+    type: remote.type || 'RDP',
+    host: remote.host || '',
+    port: String(remote.port || (String(remote.type || 'RDP').toUpperCase() === 'SSH' ? 22 : 3389))
+  });
+  const response = await fetch(`/api/remote-check?${params.toString()}`);
+  return readJson(response, 'Failed to check remote connection');
 }
 
 export async function fetchHealth(url: string): Promise<HealthResult> {
@@ -260,4 +289,15 @@ export async function saveEnvironmentAppServers(environmentId: string, servers: 
   if (!response.ok) throw new Error('Failed to save WEB/AP servers');
   const data = await response.json();
   return data.servers || [];
+}
+
+export async function saveEnvironmentRemoteConnections(environmentId: string, remotes: RemoteConnection[]): Promise<RemoteConnection[]> {
+  const response = await fetch(`/api/environments/${encodeURIComponent(environmentId)}/remote-connections`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ remotes })
+  });
+  if (!response.ok) throw new Error('Failed to save remote connections');
+  const data = await response.json();
+  return data.remotes || [];
 }
