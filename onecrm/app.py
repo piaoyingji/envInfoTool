@@ -723,6 +723,56 @@ async def api_import_vpn_guide(
     return {"guide": guide, "job": job}
 
 
+@app.post("/api/organizations/{organization_id}/vpn-guide/{guide_id}/reanalyze")
+def api_reanalyze_vpn_guide(organization_id: str, guide_id: str, request: Request) -> dict[str, Any]:
+    guide = get_vpn_guide(guide_id)
+    if not guide or str(guide.get("organization_id")) != organization_id:
+        raise HTTPException(status_code=404, detail="VPN guide not found")
+    manual_text = str(guide.get("manualRawText") or "")
+    source_text = str(guide.get("sourceRawText") or "")
+    current_text = str(guide.get("analysisRawText") or guide.get("rawText") or "")
+    sources = vpn_guide_source_files(guide_id)
+    if sources:
+        pending = save_vpn_guide_raw(
+            organization_id,
+            current_text,
+            guide_id=guide_id,
+            status="analyzing",
+            source="hermes",
+            analysis_raw_text=current_text,
+        )
+        job = create_vpn_import_job(organization_id, guide_id, sources, mode="rebuild")
+        pending["sourceFiles"] = sources
+        threading.Thread(
+            target=run_vpn_import_job,
+            args=(str(job["id"]), guide_id, organization_id, manual_text),
+            daemon=True,
+            name=f"vpn-guide-reanalyze-{guide_id}",
+        ).start()
+        audit_as(request, "reanalyze_vpn_guide", "organization", organization_id, payload={"guideId": guide_id, "jobId": job.get("id"), "sources": len(sources)})
+        return {"guide": pending, "job": job}
+    analysis_raw_text = clean_vpn_raw_text(
+        merge_vpn_raw_text(manual_text, source_text) if (manual_text.strip() or source_text.strip()) else current_text,
+        get_organization(organization_id),
+    )
+    pending = save_vpn_guide_raw(
+        organization_id,
+        analysis_raw_text,
+        guide_id=guide_id,
+        status="analyzing",
+        source="ai",
+        analysis_raw_text=analysis_raw_text,
+    )
+    threading.Thread(
+        target=analyze_vpn_guide_task,
+        args=(guide_id, organization_id, analysis_raw_text),
+        daemon=True,
+        name=f"vpn-guide-reanalyze-ai-{guide_id}",
+    ).start()
+    audit_as(request, "reanalyze_vpn_guide", "organization", organization_id, payload={"guideId": guide_id, "sources": 0})
+    return {"guide": pending}
+
+
 @app.get("/api/vpn-import-jobs/{job_id}")
 def api_vpn_import_job(job_id: str) -> dict[str, Any]:
     job = get_vpn_import_job(job_id)

@@ -1,9 +1,9 @@
-import { ArrowDownOutlined, ArrowRightOutlined, CopyOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeInvisibleOutlined, EyeOutlined, FileTextOutlined, FolderOpenOutlined, GlobalOutlined, MailOutlined, MoreOutlined, PlusOutlined, SafetyCertificateOutlined, SaveOutlined, UpOutlined, UploadOutlined } from '@ant-design/icons';
+import { ArrowDownOutlined, ArrowRightOutlined, CopyOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeInvisibleOutlined, EyeOutlined, FileTextOutlined, FolderOpenOutlined, GlobalOutlined, MailOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SafetyCertificateOutlined, SaveOutlined, UpOutlined, UploadOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Dropdown, Input, Modal, Popconfirm, Progress, Row, Select, Space, Tag, Tooltip, Upload, message } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { createEnvironment, deleteEnvironment, fetchHealth, fetchPortalConfig, fetchVpnImportJob, importOrganizationVpnGuide, postForm, saveEnvironmentAppServers, saveEnvironmentDetails, saveEnvironmentVpnSetting, saveOrganizationVpnGuide } from '../lib/api';
+import { createEnvironment, deleteEnvironment, fetchHealth, fetchPortalConfig, fetchVpnImportJob, importOrganizationVpnGuide, postForm, reanalyzeOrganizationVpnGuide, saveEnvironmentAppServers, saveEnvironmentDetails, saveEnvironmentVpnSetting, saveOrganizationVpnGuide } from '../lib/api';
 import { buildConnectionSummary } from '../lib/connectionSummary';
 import { t } from '../lib/i18n';
 import type { AppServer, Environment, Lang, Organization, PortalData, RemoteConnection, TagItem, VpnGuide, VpnImportJob, VpnWorkflowStep } from '../lib/types';
@@ -121,6 +121,7 @@ function AddEnvironmentButton({ lang, org, onCreated }: { lang: Lang; org: Organ
   const [title, setTitle] = useState('');
   const [tagText, setTagText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [reanalyzingGuideId, setReanalyzingGuideId] = useState<string | null>(null);
 
   const reset = () => {
     setTitle('');
@@ -203,6 +204,7 @@ function OrgVpnGuide({ lang, org, canWrite, onSaved }: { lang: Lang; org: Organi
   const [rawText, setRawText] = useState('');
   const [sourceFiles, setSourceFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
+  const [reanalyzingGuideId, setReanalyzingGuideId] = useState<string | null>(null);
   const [pendingGuide, setPendingGuide] = useState<VpnGuide | null>(null);
   const [importJob, setImportJob] = useState<VpnImportJob | null>(null);
   const vpnGuides = org.vpnGuides || [];
@@ -253,7 +255,7 @@ function OrgVpnGuide({ lang, org, canWrite, onSaved }: { lang: Lang; org: Organi
   const startEdit = (guide?: VpnGuide) => {
     setEditingGuide(guide || null);
     setGuideName(guide?.name || '');
-    setRawText(guide?.manualRawText || '');
+    setRawText(guide?.manualRawText || guide?.rawText || '');
     setSourceFiles([]);
     setEditing(true);
   };
@@ -303,6 +305,22 @@ function OrgVpnGuide({ lang, org, canWrite, onSaved }: { lang: Lang; org: Organi
       message.error(error instanceof Error ? error.message : 'Failed to save VPN guide');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const reanalyze = async (guide: VpnGuide) => {
+    if (reanalyzingGuideId) return;
+    setReanalyzingGuideId(guide.id);
+    try {
+      const result = await reanalyzeOrganizationVpnGuide(org.id, guide.id);
+      setPendingGuide(result.guide);
+      if (result.job) setImportJob(result.job);
+      message.success(t(lang, 'reanalyzeStarted'));
+      onSaved();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Failed to reanalyze VPN guide');
+    } finally {
+      setReanalyzingGuideId(null);
     }
   };
 
@@ -394,7 +412,20 @@ function OrgVpnGuide({ lang, org, canWrite, onSaved }: { lang: Lang; org: Organi
                   {guide.workflowStatus === 'analyzing' && <Tag color="processing">{t(lang, 'aiAnalyzing')}</Tag>}
                   {(guide.sourceFiles || []).length > 0 && <Tag icon={<FileTextOutlined />}>{(guide.sourceFiles || []).length}</Tag>}
                 </Space>
-                {canWrite && <Button size="small" icon={<EditOutlined />} disabled={guide.workflowStatus === 'analyzing'} onClick={() => startEdit(guide)}>{t(lang, 'edit')}</Button>}
+                {canWrite && (
+                  <Space size={6}>
+                    <Button
+                      size="small"
+                      icon={<ReloadOutlined />}
+                      loading={reanalyzingGuideId === guide.id}
+                      disabled={guide.workflowStatus === 'analyzing'}
+                      onClick={() => reanalyze(guide)}
+                    >
+                      {t(lang, 'reanalyze')}
+                    </Button>
+                    <Button size="small" icon={<EditOutlined />} disabled={guide.workflowStatus === 'analyzing'} onClick={() => startEdit(guide)}>{t(lang, 'edit')}</Button>
+                  </Space>
+                )}
               </div>
               {(guide.sourceFiles || []).length > 0 && (
                 <div className="vpn-source-files">

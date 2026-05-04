@@ -63,6 +63,10 @@ Large-model calls should be used for consolidation, deduplication, contradiction
 7. Backend stores `sourceRawText`, keeps user-maintained `manualRawText`, and builds `analysisRawText = sourceRawText + manualRawText` after cleaning irrelevant customer-context duplicates.
 8. VPN workflow analysis runs against `analysisRawText` and updates the guide with ordered steps, mail templates, automatic tags, and analysis status.
 
+### Reanalysis
+
+Users can rerun AI analysis from the VPN guide header without entering edit mode. When the guide has source files, the backend creates a rebuild job for the full current source-file set and calls Hermes again. When no source files exist, the backend reuses the current `analysisRawText` or the combination of `manualRawText` and `sourceRawText` and starts the AI workflow task directly. Reanalysis must set the guide to `analyzing` immediately so the frontend can show progress without requiring another upload.
+
 ### Source Text Fields
 
 - `sourceRawText`: derived from the current full source-file set. It is rebuilt by Hermes and must not be manually edited.

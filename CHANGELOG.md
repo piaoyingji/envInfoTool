@@ -8,6 +8,18 @@ All notable changes to OneCRM are documented here.
 
 - NewUI branch development is versioned continuously. Every stable feature or behavior batch should receive a 2.5.x patch version before commit instead of accumulating indefinitely under 2.5.0.
 
+## [2.5.11] - 2026-05-04
+
+### Added
+
+- Added a dedicated VPN guide reanalysis action beside edit. Existing manual text and archived source files are reused, so users can rerun AI workflow analysis without re-uploading files.
+- Added `POST /api/organizations/{organization_id}/vpn-guide/{guide_id}/reanalyze` to rebuild Hermes-derived source text when files exist, or rerun AI analysis against current text when no files are attached.
+
+### Changed
+
+- Raised the current application version to `2.5.11`.
+- VPN guide editing now opens with existing raw text when no separate manual text has been saved, avoiding the impression that users must upload source files again.
+
 ## [2.5.10] - 2026-05-04
 
 ### Changed

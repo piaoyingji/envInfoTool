@@ -190,6 +190,17 @@ export async function importOrganizationVpnGuide(organizationId: string, values:
   return result;
 }
 
+export async function reanalyzeOrganizationVpnGuide(organizationId: string, guideId: string): Promise<{ guide: VpnGuide; job?: VpnImportJob }> {
+  const response = await fetch(`/api/organizations/${encodeURIComponent(organizationId)}/vpn-guide/${encodeURIComponent(guideId)}/reanalyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}'
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result?.detail || 'Failed to reanalyze VPN guide');
+  return result;
+}
+
 export async function fetchVpnImportJob(jobId: string): Promise<VpnImportJob> {
   const response = await fetch(`/api/vpn-import-jobs/${encodeURIComponent(jobId)}`);
   if (!response.ok) throw new Error('Failed to load VPN import job');
