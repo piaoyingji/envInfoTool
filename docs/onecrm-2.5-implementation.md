@@ -33,6 +33,8 @@ The customer-level VPN guide panel is the only place that renders the full workf
 
 VPN workflow analysis prompts require Japanese operator-facing output by default. The prompt keeps main steps coarse-grained and stores server rows, credentials, URLs, ports, and remarks in `credentialGroups` or step details. Parser metadata is source context only and must not become workflow cards.
 
+The backend also guards against over-fragmentation after AI returns. If the model still emits too many top-level steps, post-processing groups them into major phases such as preparation/request, LAPLINK, VPN connection, target server connection, and completion contact. The local fallback follows the same phase-based structure instead of splitting every source line.
+
 ## VPN File Ingestion
 
 The VPN guide editor supports multi-file ingestion. Users can attach several files while creating or updating a VPN guide. The backend stores source files in MinIO, rebuilds source-derived text, then triggers the VPN workflow analysis pipeline.

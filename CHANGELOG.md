@@ -8,6 +8,15 @@ All notable changes to OneCRM are documented here.
 
 - NewUI branch development is versioned continuously. Every stable feature or behavior batch should receive a 2.5.x patch version before commit instead of accumulating indefinitely under 2.5.0.
 
+## [2.5.14] - 2026-05-04
+
+### Changed
+
+- Raised the current application version to `2.5.14`.
+- Rebalanced VPN workflow AI analysis toward major operator phases, preserving previous better behavior of "few large steps with related information inside each step."
+- Added post-processing to merge over-fragmented AI output back into major phases when the model returns too many top-level steps.
+- Reworked local fallback VPN workflow generation so AI failures no longer split each source line, credential, or token into a separate workflow card.
+
 ## [2.5.13] - 2026-05-04
 
 ### Changed

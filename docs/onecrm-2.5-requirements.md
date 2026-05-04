@@ -78,6 +78,7 @@ The product name is `OneCRM`. The legacy `EnvPortal` name is kept only in migrat
 - VPN guide references and source references are traceability metadata. They must not cause repeated workflow rendering or encourage read-only users to download raw source files when structured AI output is available.
 - VPN workflow AI output must default to Japanese for all operator-facing text. English output is not acceptable unless the value is a literal technical token from the source.
 - VPN workflow AI must keep the main procedure coarse-grained. Server lists and credentials belong in details or credential groups, not as one top-level step per server row.
+- If AI returns over-fragmented output, the backend must merge it back into major operator phases before storing workflow cards.
 
 ## i18n Requirements
 

@@ -59,15 +59,15 @@ def summarize_vpn_workflow_with_ai(raw_text: str) -> list[dict[str, Any]]:
                 "You convert messy VPN operation notes into a concise operator workflow for Japanese operators. "
                 "Return only valid JSON. The JSON must be an array. Each item must have "
                 "order:number, title:string, description:string, action:string. "
-                "All user-facing JSON strings, including title, description, labels, notes, and mail fields, must be written in Japanese unless the source value is a literal URL, host, username, password, account, command, file path, or quoted original phrase. "
-                "Never output English workflow titles such as Request, Connect to, Reference, or Set up. Use natural Japanese titles such as 申請, 事前確認, 保守端末切替, LAPLINK接続, VPN接続, サーバ接続, 作業終了連絡. "
-                "Keep the workflow coarse-grained and operator-oriented. Prefer 4 to 6 main steps for a normal VPN/remote connection guide. Do not create one main step for every server row, every credential, every parser marker, or every file/source line. "
-                "Use details and credentialGroups inside the relevant main step to preserve server rows, users, passwords, URLs, ports, and notes. "
+                "All operator-facing JSON strings must be written in Japanese. Keep literal URLs, hosts, usernames, passwords, account IDs, commands, paths, and original proper nouns exactly as written. "
+                "The top-level workflow must be a small number of major phases, usually 3 to 6 steps: preparation/request, preliminary connection or line switch, VPN connection, target server connection, and finish/contact if present. "
+                "Do not create top-level steps for individual credentials, individual server rows, source file names, parser metadata, table headings, or isolated tokens. Those belong in details or credentialGroups inside the relevant major phase. "
+                "Never output English workflow titles such as Request, Connect to, Reference, or Set up. Use natural Japanese titles such as 事前確認, 保守端末切替依頼, LAPLINK接続, VPN接続, 対象サーバ接続, 作業終了連絡. "
                 "Each item may also have details, an array of {label:string,value:string}. "
                 "When a step contains one or more servers, hosts, jump hosts, remote desktops, database consoles, VPN portals, or any credentials bound to a host, add credentialGroups. "
                 "credentialGroups must be an array of {title,host,address,port,protocol,username,password,note,details:[{label,value}]}. "
                 "Every username, password, shared secret, server address, host name, port, and protocol must be placed in the credentialGroups object for the exact server/hop it belongs to. "
-                "If the source lists several servers in a table or adjacent rows, keep them under the same connection step by creating one credentialGroups item per server row and keeping the row's username/password paired with that server. "
+                "If the source lists several servers in a table or adjacent rows, keep them under one target-server connection step by creating one credentialGroups item per server row and keeping the row's username/password paired with that server. "
                 "Do not put a list of hosts followed by a separate list of usernames/passwords in generic details; that loses association and is invalid. "
                 "For any step that involves sending an email and includes recipients, CC, or BCC, set action to mail and include "
                 "mailTemplate:{to:string,cc:string,bcc:string,subject:string,body:string}. "
@@ -76,7 +76,7 @@ def summarize_vpn_workflow_with_ai(raw_text: str) -> list[dict[str, Any]]:
                 "If there is only mail body text without to/cc/bcc, do not create mailTemplate; keep it as a normal detail or description. "
                 "Use action values from: request, mail, contact, connect, verify, remote, note. "
                 "If a step requires applying for VPN/remote permission by email, phone, contact, approval, request, or any similar application process, make that step action request or contact. "
-                "Group related credentials into the same step instead of splitting every line. "
+                "Group related credentials into the same major step instead of splitting every line. "
                 "Credentials are critical operation data. Put URLs, hosts, ports, account IDs, usernames, passwords, shared secrets, OTP notes, contacts, and remarks in details when possible. "
                 "Keep passwords, shared secrets, account names, URLs, customer contacts, and mail instructions exactly when present; never mask, omit, summarize, or replace them. "
                 "For credentials, use standalone detail objects such as {label:'VPN username',value:'...'} and {label:'VPN password',value:'...'} instead of mixing labels and values into long sentences. "
@@ -84,7 +84,7 @@ def summarize_vpn_workflow_with_ai(raw_text: str) -> list[dict[str, Any]]:
                 "Japanese file or folder names may express scope or precedence, such as '20260501以降', '新サーバ', '補足', '追加', or '旧'; use that meaning when deciding which instructions apply. "
                 "When the input contains a Source precedence section, use it to decide the current effective procedure. Prefer current/override/supplement sources over historical sources, and use client modified dates, path dates, and content date hints to resolve conflicts. "
                 "If sources conflict, output the final adopted instruction in the step and keep the source filename/path in details when useful. Historical sources may be referenced only as old information and must not override newer effective instructions. "
-                "If connection notes say one server must be reached through another host, jump server, bastion, gateway, proxy, relay, '踏み台', '経由', '中継', or similar, split those different hops into ordered connection steps. "
+                "If connection notes say one server must be reached through another host, jump server, bastion, gateway, proxy, relay, '踏み台', '経由', '中継', or similar, split those different hops into ordered major steps only when the operator must perform them sequentially. "
                 "Keep credentials attached to the exact host or hop they belong to, and do not flatten all servers into one generic remote connection detail list. "
                 "Do not create steps or details for customer/organization code or customer/organization name by themselves; those are page context, not operating procedure. "
                 "Ignore content unrelated to VPN, remote access, connection approval, servers used for remote operation, credentials, contacts, or mail templates. "
@@ -133,7 +133,94 @@ def normalize_ai_steps(value: Any) -> list[dict[str, Any]]:
         })
     if not steps:
         raise ValueError("AI workflow did not contain usable steps.")
+    if len(steps) > 6:
+        steps = coalesce_overfragmented_steps(steps)
     return steps
+
+
+def coalesce_overfragmented_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    buckets: list[dict[str, Any]] = []
+    bucket_defs = [
+        ("事前確認・申請", "作業前に必要な確認、申請、連絡を行います。", "request", ["申請", "依頼", "許可", "承認", "電話", "連絡", "切替", "request", "contact"]),
+        ("LAPLINK接続", "LAPLINKまたは保守端末への接続を行います。", "connect", ["laplink", "アナログ", "保守端末"]),
+        ("VPN接続", "VPN接続情報を使用してVPNへ接続します。", "connect", ["vpn", "yms", "yamaha", "forticlient", "共有鍵"]),
+        ("対象サーバ接続", "VPNまたは保守端末経由で対象サーバへ接続します。", "remote", ["サーバ", "server", "db", "ap", "ip", "administrator", "windows", "oracle", "remote"]),
+        ("作業終了連絡", "作業完了後に必要な終了連絡を行います。", "contact", ["終了", "完了", "報告", "mail"]),
+    ]
+    for title, description, action, tokens in bucket_defs:
+        matched = [step for step in steps if step_matches_bucket(step, tokens)]
+        if not matched:
+            continue
+        buckets.append({
+            "order": len(buckets) + 1,
+            "title": title,
+            "description": description,
+            "action": action,
+            "details": merge_step_details(matched),
+            "credentialGroups": merge_credential_groups(matched),
+            "mailTemplate": first_mail_template(matched),
+            "source": "ai",
+        })
+    if buckets:
+        return buckets[:6]
+    return steps[:6]
+
+
+def step_matches_bucket(step: dict[str, Any], tokens: list[str]) -> bool:
+    text = " ".join([
+        str(step.get("title") or ""),
+        str(step.get("description") or ""),
+        str(step.get("action") or ""),
+        json.dumps(step.get("details") or [], ensure_ascii=False),
+        json.dumps(step.get("credentialGroups") or [], ensure_ascii=False),
+    ]).lower()
+    return any(token.lower() in text for token in tokens)
+
+
+def merge_step_details(steps: list[dict[str, Any]]) -> list[dict[str, str]]:
+    details: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for step in steps:
+        title = str(step.get("title") or "").strip()
+        description = str(step.get("description") or "").strip()
+        if description:
+            key = (title or "情報", description)
+            if key not in seen:
+                seen.add(key)
+                details.append({"label": title or "情報", "value": description})
+        for detail in step.get("details") or []:
+            if not isinstance(detail, dict):
+                continue
+            label = str(detail.get("label") or "情報").strip()
+            value = str(detail.get("value") or "").strip()
+            key = (label, value)
+            if value and key not in seen:
+                seen.add(key)
+                details.append({"label": label, "value": value})
+    return details[:30]
+
+
+def merge_credential_groups(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for step in steps:
+        for group in step.get("credentialGroups") or []:
+            if not isinstance(group, dict):
+                continue
+            key = json.dumps(group, ensure_ascii=False, sort_keys=True)
+            if key in seen:
+                continue
+            seen.add(key)
+            groups.append(group)
+    return groups[:20]
+
+
+def first_mail_template(steps: list[dict[str, Any]]) -> dict[str, str] | None:
+    for step in steps:
+        mail = step.get("mailTemplate")
+        if isinstance(mail, dict):
+            return mail
+    return None
 
 
 def normalize_action(value: str) -> str:
