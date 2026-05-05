@@ -35,6 +35,16 @@ OneCRM 2.5 replaces the static EnvPortal UI with a React/Ant Design enterprise i
 - Customer deletion is intentionally omitted in this phase because it would need explicit cascade policy for environments, VPN guides, source files, remote connections, and audit history.
 - The frontend customer master page shows existing environment summaries as read-only context and reserves non-mock placeholders for contracts, implemented products, custom development, and code comparison.
 
+## Responsive Workbench
+
+2.5.17 changes the customer environment layout to a desktop-first workbench with a separate mobile query mode.
+
+- The desktop customer environment workbench uses a 1440px minimum internal width. It keeps the main content column and right-side data navigator as two columns; 1024px-1439px viewports scroll horizontally instead of collapsing the data navigator.
+- The data navigator width is stabilized with `clamp(248px, 16vw, 320px)` so it stays usable on wide screens without consuming excessive content space.
+- Below 1024px the page enters query mode: the left system navigation is hidden, the right-side data navigator becomes a horizontal customer selector above content, and environment cards render as one column.
+- Below 760px tag filters become horizontally scrollable touch targets, environment card headers wrap, and VPN/remote actions remain visible without text overlap.
+- Customer master uses the `no-data-nav` layout and is not forced into the customer environment desktop minimum width.
+
 ## Remote Connection Scope and Masters
 
 2.5.16 restores multi-record RDS/RDP maintenance and separates private remote records from shared remote masters.

@@ -8,6 +8,15 @@ All notable changes to OneCRM are documented here.
 
 - NewUI branch development is versioned continuously. Every stable feature or behavior batch should receive a 2.5.x patch version before commit instead of accumulating indefinitely under 2.5.0.
 
+## [2.5.17] - 2026-05-05
+
+### Changed
+
+- Raised the current application version to `2.5.17`.
+- Added a desktop-first workbench width strategy for the customer environment page. Desktop layouts keep the right-side data navigator in place and use horizontal scrolling below the 1440px workbench width instead of collapsing the layout too early.
+- Added tablet and mobile query layouts below 1024px. The customer data navigator becomes a horizontal selector, environment cards render in a single column, and tag filters remain touch-friendly.
+- Reduced responsive breakpoint conflicts that previously moved the right data navigator to the top around 1100px.
+
 ## [2.5.16] - 2026-05-05
 
 ### Added

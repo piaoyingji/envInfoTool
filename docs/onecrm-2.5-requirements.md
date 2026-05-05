@@ -21,6 +21,9 @@ The product name is `OneCRM`. The legacy `EnvPortal` name is kept only in migrat
 - Customer master detail reserves lightweight future areas for contract information, implemented products, custom development, and code comparison. These areas must not display mock business data.
 - The main navigation must only expose usable entries. Inactive future modules must not look clickable.
 - The right-side data navigator is the customer navigation surface. It contains customer search, customer code, customer name, and all-customer selection.
+- The customer environment desktop workspace has a minimum usable workbench width of 1440px. On 1024px-1439px desktop/tablet-landscape viewports, the full workbench remains intact and horizontal scrolling is allowed instead of moving the data navigator.
+- Below 1024px, the customer environment page switches to a query-oriented layout: the data navigator becomes a horizontal customer selector, environment cards render as a single column, tags remain touch-friendly, and read/copy/VPN/remote-connection actions remain usable.
+- Mobile and tablet layouts prioritize lookup and operations use. Complex Admin edit forms may remain available, but they are not the primary responsive optimization target.
 - Language is global, not page-scoped. Default language is Japanese; Chinese is used only when the user explicitly selects it. The selection is cached per browser user.
 - Tags are visual buttons/chips, not dropdown-only filters. Tag colors must be consistent between filter area, server cards, VPN guide tags, database auto tags, and source-role tags.
 - Server/environment cards default to collapsed state. Users explicitly expand/collapse each card. Hover-driven expansion and auto-collapse are not used.
