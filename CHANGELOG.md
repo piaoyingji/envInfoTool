@@ -8,6 +8,13 @@ All notable changes to OneCRM are documented here.
 
 - NewUI branch development is versioned continuously. Every stable feature or behavior batch should receive a 2.5.x patch version before commit instead of accumulating indefinitely under 2.5.0.
 
+## [2.5.19] - 2026-05-05
+
+### Changed
+
+- Raised the current application version to `2.5.19`.
+- Added a softer warm outer glow to the sidebar logo so it separates better from the dark navy navigation background.
+
 ## [2.5.18] - 2026-05-05
 
 ### Added
