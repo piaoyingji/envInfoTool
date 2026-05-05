@@ -1,4 +1,4 @@
-import { DatabaseOutlined, FileProtectOutlined, GitlabOutlined, PlusOutlined, ProductOutlined, SaveOutlined, UsergroupAddOutlined } from '@ant-design/icons';
+import { DatabaseOutlined, FileProtectOutlined, GitlabOutlined, PlusOutlined, ProductOutlined, SaveOutlined, SearchOutlined, UsergroupAddOutlined } from '@ant-design/icons';
 import { Button, Card, Empty, Input, Modal, Space, Tooltip, message } from 'antd';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
@@ -27,16 +27,30 @@ export default function CustomerMasterPage({ lang, organizations, canWrite }: Pr
   const [editMode, setEditMode] = useState(false);
   const [editDraft, setEditDraft] = useState<CustomerDraft>({ code: '', name: '' });
   const [saving, setSaving] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
+
+  const filteredOrganizations = useMemo(() => {
+    const keyword = customerSearch.trim().toLowerCase();
+    if (!keyword) return organizations;
+    return organizations.filter((org) => {
+      const code = (org.code || '').toLowerCase();
+      const name = (org.name || '').toLowerCase();
+      return code.includes(keyword) || name.includes(keyword);
+    });
+  }, [organizations, customerSearch]);
 
   const selected = useMemo(
-    () => organizations.find((org) => org.id === selectedId) || organizations[0] || null,
-    [organizations, selectedId]
+    () => filteredOrganizations.find((org) => org.id === selectedId) || filteredOrganizations[0] || null,
+    [filteredOrganizations, selectedId]
   );
 
   useEffect(() => {
-    if (selected && selected.id !== selectedId) setSelectedId(selected.id);
-    if (!selected && organizations[0]) setSelectedId(organizations[0].id);
-  }, [organizations, selected, selectedId]);
+    if (selected && selected.id !== selectedId) {
+      setSelectedId(selected.id);
+      return;
+    }
+    if (!selected && !customerSearch && organizations[0]) setSelectedId(organizations[0].id);
+  }, [customerSearch, organizations, selected, selectedId]);
 
   useEffect(() => {
     if (selected && !editMode) setEditDraft({ code: selected.code, name: selected.name });
@@ -95,8 +109,19 @@ export default function CustomerMasterPage({ lang, organizations, canWrite }: Pr
 
       <div className="customer-master-layout">
         <Card className="customer-master-list-card" title={t(lang, 'customers')}>
+          <Input
+            allowClear
+            className="customer-master-search"
+            prefix={<SearchOutlined />}
+            placeholder={t(lang, 'customerSearch')}
+            value={customerSearch}
+            onChange={(event) => {
+              setCustomerSearch(event.target.value);
+              setEditMode(false);
+            }}
+          />
           <div className="customer-master-list">
-            {organizations.map((org) => (
+            {filteredOrganizations.map((org) => (
               <button
                 key={org.id}
                 type="button"
@@ -113,6 +138,9 @@ export default function CustomerMasterPage({ lang, organizations, canWrite }: Pr
                 </span>
               </button>
             ))}
+            {filteredOrganizations.length === 0 && (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(lang, 'noCustomers')} />
+            )}
           </div>
         </Card>
 

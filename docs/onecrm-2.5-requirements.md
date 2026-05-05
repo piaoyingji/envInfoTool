@@ -18,6 +18,7 @@ The product name is `OneCRM`. The legacy `EnvPortal` name is kept only in migrat
 - Use the OneCRM design language: deep navy navigation, gold accent, warm light workspace, rounded but restrained panels, and dense operational cards.
 - The customer master page and customer environment page are the two current business workspaces. Data management and remote-connection management are hidden from the main navigation until they become full product surfaces.
 - The customer master page maintains customer code and customer name. It also shows the customer's registered server/environment summaries as read-only relationship context.
+- The customer master list must support filtering by customer code or customer name because production deployments can contain many customer master records.
 - Customer master detail reserves lightweight future areas for contract information, implemented products, custom development, and code comparison. These areas must not display mock business data.
 - The main navigation must only expose usable entries. Inactive future modules must not look clickable.
 - The right-side data navigator is the customer navigation surface. It contains customer search, customer code, customer name, and all-customer selection.

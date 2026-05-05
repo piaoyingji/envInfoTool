@@ -8,6 +8,17 @@ All notable changes to OneCRM are documented here.
 
 - NewUI branch development is versioned continuously. Every stable feature or behavior batch should receive a 2.5.x patch version before commit instead of accumulating indefinitely under 2.5.0.
 
+## [2.5.18] - 2026-05-05
+
+### Added
+
+- Added customer master list filtering by customer code or name so large customer master imports remain usable.
+- Added Japanese and Chinese empty-state messages for customer master searches with no matches.
+
+### Changed
+
+- Raised the current application version to `2.5.18`.
+
 ## [2.5.17] - 2026-05-05
 
 ### Changed
